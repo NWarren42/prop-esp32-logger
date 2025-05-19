@@ -134,13 +134,13 @@ config = readConfig(CONFIG_FILE)
 sensors = initializeFromConfig(config)
 
 udpListener = UDPListener(port=40000)
-tcpListener = TCPHandler(port=50000)
+tcpListener = TCPHandler(sensors, port=50000)
 server = AsyncManager(udpListener, tcpListener, config)
 
 ## I2C Setup
 # The Pins NEED to be set to OUT. For some reason the I2C bus doesn't automatically set this on initialization of the bus.
 sclPin = Pin(6, Pin.OUT) # SCL pin is GPIO 6 on the ESP32. This connects to pin 16 on the ADC
-sdaPin = Pin(7, Pin.OUT) # SDA pin is GPIO 7 on the ESP32. This connects to pin 15 on the ADC
+sdaPin = Pin(7, Pin.OUT) # SDA pin is GPIO 7 on the ESP32. This connects to pin 15 on the ADC -- THIS MIGHT BE PROBLEMATIC, CANT READ SDA?
 
 # I2C bus 1, SCL pin 6, SDA pin 7, frequency 100kHz
 i2cBus = I2C(1, scl=sclPin, sda=sdaPin, freq=100000)

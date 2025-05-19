@@ -1,0 +1,36 @@
+version: "0.2"
+ignorePaths: []
+dictionaryDefinitions: []
+dictionaries: []
+words:
+  - absjoin
+  - DGRAM
+  - DUMBASS
+  - ECONNRESET
+  - essid
+  - figsize
+  - getch
+  - isconnected
+  - kbhit
+  - labjack
+  - libqretprop
+  - micropython
+  - Modbus
+  - mpremote
+  - Nikhil
+  - osdebug
+  - pyproject
+  - pyqtgraph
+  - QRET
+  - qretproptools
+  - REUSEADDR
+  - showlegend
+  - skiprows
+  - teststand
+  - webrepl
+  - WLAN
+  - xaxes
+  - yaxes
+  - ylim
+ignoreWords: []
+import: []

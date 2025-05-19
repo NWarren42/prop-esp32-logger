@@ -19,12 +19,29 @@ class Thermocouple:
                   ):
 
         self.name = name
-        self.ADCIndex = ADCIndex
-        self.highPin = ADC(Pin(highPin, Pin.IN))
-        self.lowPin = ADC(Pin(lowPin, Pin.IN))
+        self.ADCIndex = ADCIndex # ADCIndex is the index of the ADC in the config file. 0 indicates the ESP32 ADC.
+        if self.ADCIndex == 0:
+            # If the ADC index is 0, use the ESP32 ADC
+            self.highPin = ADC(highPin) # Pin number is the GPIO pin number. ADC constructor accepts either integer or a Pin() object.
+            self.lowPin = ADC(lowPin)
         self.type = thermoType
         self.units = units
 
-    def takeData (self) -> float: # Currently returns differential voltage reading
-        diffReading = self.highPin.read() - self.lowPin.read()
-        return diffReading
+        self.data = []
+
+    def takeData (self, units="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
+        """Take a reading from the thermocouple.
+        Args:
+            unit (str, optional): The units to return the reading in. Defaults
+            to "DEF". If "DEF" is specified, the units will be the same as the
+            units specified in the config file. Currently V is the only valid call.
+        """
+        if units == "DEF":
+            units = self.units
+
+        vReading = self.highPin.read() - self.lowPin.read()
+        if units == "V":
+            return (vReading/4095) * 3.3 # 4095 is the max value for the ESP32 ADC. 3.3V is the max voltage output of the ESP32 ADC.
+
+        else:
+            raise ValueError(f"Invalid unit specified: {units}. Valid units are \'V\'.")

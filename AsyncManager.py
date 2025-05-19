@@ -21,6 +21,7 @@ class AsyncManager:
 
         # Generating list of sockets to pass to select
         self.inputs: list[socket.socket] = [self.udpListener.udpSocket, self.tcpListener.tcpSocket]
+        self.outputs: list[socket.socket] = []  # Unused on startup, but used for establishing streaming sockets
 
 
     def run(self) -> None:
@@ -29,14 +30,16 @@ class AsyncManager:
         try:
             while self.running:
                 # Monitor sockets for if they become readable
-                readable, _, _ = select.select(self.inputs, [], [])
+                readable, writeable, _ = select.select(self.inputs, self.outputs, [])
                 for sock in readable:
+                    # If a UDP message is received, handle it in the UDPListener
                     if sock == self.udpListener.udpSocket:
                         data, address = sock.recvfrom(1024)
                         print(f"Received UDP message: {data.decode('utf-8')} from {address}")
                         # Handle all UDP messages in the UDPListener.
                         self.udpListener.handleMessage(data, address, self.tcpListener.port) # Pass data to the listener
 
+                    # If a message comes in on the TCP listener, accept it and add it to a list of sockets to monitor
                     elif sock == self.tcpListener.tcpSocket:
                         clientSocket, clientAddress = sock.accept() # Generate communication socket between listener and client
                         print(f"New TCP connection from {clientAddress}. Socket assigned to {clientSocket}")
@@ -49,14 +52,35 @@ class AsyncManager:
                         self.sendConfig(clientSocket, self.configDict)
                         print(f"Sent config file to {clientAddress}.")
 
+                    # If the message comes in on a socket that is not the listener, it must be an established client socket so we
+                    # pass any messages onto the handler with the socket information so that it can respond with the desired data.
                     else:
                         sockAddress = self.tcpAddressDict[sock] # Get the address of the socket
-                        status = self.tcpListener.handleMessage(sock, sockAddress) # If a message comes in on a socket that is not the listener, pass it to the handler
+                        status, cmd = self.tcpListener.handleMessage(sock, sockAddress) # If a message comes in on a socket that is not the listener, pass it to the handler
+
+                        if cmd == "STRM": # If the command is STRM, add the socket to the list of sockets to monitor for streaming
+                            self.outputs.append(sock) # Add the socket to the list of sockets to monitor for streaming
+                            print(f"Streaming data to {sockAddress}.")
+
+                        elif cmd == "STOP": # If the command is STOP, remove the socket from the list of sockets to monitor for streaming
+                            if sock in self.outputs: # Check if the socket is in streaming mode
+                                self.outputs.remove(sock) # Remove the socket from the list of sockets to monitor for streaming
+                                print(f"Stopped streaming data to {sockAddress}.")
+                            else: # If the socket is not in streaming mode, do nothing
+                                print(f"Socket {sockAddress} not in streaming list.")
+
                         if not status: # If the handler raises an error close the connection and remove all trace of the socket
                             print(f"Connection closed by {sockAddress}.")
                             self.inputs.remove(sock) # Remove from select read list
                             sock.close() # Close the socket
                             self.tcpAddressDict.pop(sock) # Remove from the address LUT
+
+                for sock in writeable: # If the socket is in streaming mode, try to write to it
+                    try:
+                        streamPacket = self.tcpListener.getStreamPacket() # Get the stream packet from the TCPHandler
+                        sock.sendall(streamPacket) # Send the stream packet to the client
+                    except Exception as e:
+                        print(f"Error sending stream packet to {self.tcpAddressDict[sock]}: {e}")
 
         except KeyboardInterrupt:
             if self.running:
@@ -70,7 +94,7 @@ class AsyncManager:
         try:
                 # Convert the config file to a JSON string so it can have the encode method called on it
                 jStringConfig = ujson.dumps(config)
-                confString = "CONF" + jStringConfig # Add a header to the config file so the client knows what it is receiving
+                confString = "CONF" + jStringConfig + "\n" # Add a header to the config file so the client knows what it is receiving
 
                 # Currently TCP block size is 1024 bytes, this can be changed if needed but config files are small right now.
                 # This is meant as a warning block of code if we start having larger config files.

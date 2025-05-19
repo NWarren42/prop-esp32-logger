@@ -5,8 +5,8 @@
         "thermocouples": {
             "TCNitrousRun": {
                 "ADCIndex" : 0,
-                "highPin" : 2,
-                "lowPin" : 3,
+                "highPin" : 10,
+                "lowPin" : 11,
                 "type" : "K",
                 "units" : "C"
             }
@@ -14,19 +14,19 @@
         "pressureTransducers": {
             "PTFill": {
                 "ADCIndex" : 0,
-                "pin" : 4,
+                "pin" : 12,
                 "maxPressure_PSI" : 1000,
-                "units" : "psi"
+                "units" : "PSI"
             }
         },
 
         "loadCells": {
             "LCThrust": {
                 "ADCIndex" : 0,
-                "highPin" : 5,
-                "lowPin" : 6,
+                "highPin" : 13,
+                "lowPin" : 14,
                 "loadRating_N" : 5000,
-                "excitation_V" : 10,    
+                "excitation_V" : 10,
                 "sensitivity_vV" : 2,
                 "units" : "N"
             }
