@@ -1,5 +1,7 @@
-import errno # need to import errno for OSError handling
-import socket  # noqa: INP001 -- Implicit namespace doesn't matter for ESP32 filesystem
+import errno  # need to import errno for OSError handling
+import socket
+
+import utime  # type: ignore # Implicit namespace doesn't matter for ESP32 filesystem
 
 
 class TCPHandler:
@@ -37,8 +39,15 @@ class TCPHandler:
         self.tcpSocket.listen(1)  # Allow only 1 connection backlog
         print(f"TCP Listener initialized on port {self.port}")
 
-    def getStreamPacket(self) -> list:
+    def getStreamPacket(self) -> bytes:
+
+        # set up a list to hold the readings
         readings = []
+
+        # Grab time stamp for the data packet
+        ts = utime.ticks_ms() # ms since boot
+        readings.append(ts)  # Append the timestamp to the list to send back to the client
+
         for sensor in self.sensors:
             # Take a reading from each sensor and append it to the readings list
             sensorData = sensor.takeData('V')  # The sensor object handles the conversion. The only argument is the unit you want back.
@@ -63,16 +72,16 @@ class TCPHandler:
 
             # GETS is a command to get a single reading from each of the sensors
             if cmd == "GETS":
-                allData = []
-                print(self.sensors) # Debugging line to see in what order the sensors are being read
-                for sensor in self.sensors:
-                    # ONLY READING VOLTAGE FOR NOW WHILE NO DEVICES CONNECTED
-                    sensorData = sensor.takeData('V') # The sensor object handles the conversion. The only argument is the unit you want back.
-                    sensor.data.append(sensorData)  # Add the collected data to the sensor's internal data list.
-                    print(f"Sensor {sensor.name} data: {sensorData} V") # Print the data for debugging FIXED IN VOLTS
-                    allData.append(sensorData)  # Append the data to the list to send back to the client
-                response = "DATA" + f"{allData}".strip("[]") + "\n" # Convert the list to a string for sending. We need to strip the brackets off the list so that it is a comma separated string.
-                clientSocket.sendall(response.encode("utf-8"))  # Send the data back to the client
+                # allData = []
+                # print(self.sensors) # Debugging line to see in what order the sensors are being read
+                # for sensor in self.sensors:
+                #     # ONLY READING VOLTAGE FOR NOW WHILE NO DEVICES CONNECTED
+                #     sensorData = sensor.takeData('V') # The sensor object handles the conversion. The only argument is the unit you want back.
+                #     sensor.data.append(sensorData)  # Add the collected data to the sensor's internal data list.
+                #     print(f"Sensor {sensor.name} data: {sensorData} V") # Print the data for debugging FIXED IN VOLTS
+                #     allData.append(sensorData)  # Append the data to the list to send back to the client
+                # response = "DATA" + f"{allData}".strip("[]") + "\n" # Convert the list to a string for sending. We need to strip the brackets off the list so that it is a comma separated string.
+                clientSocket.sendall(self.getStreamPacket())  # Send the data back to the client
 
             # STRM is a command to start streaming data from the sensors
             if cmd == "STRM":

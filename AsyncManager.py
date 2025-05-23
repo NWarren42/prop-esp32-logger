@@ -2,6 +2,7 @@ import select  # noqa: INP001 -- Implicit namespace doesn't matter here
 import socket  # noqa: TCH003 -- Typing not a library within micropython, cant put into a typed block
 
 import ujson  # type:ignore # ujson and machine are micropython libraries
+
 from TCPHandler import TCPHandler
 from UDPListener import UDPListener
 

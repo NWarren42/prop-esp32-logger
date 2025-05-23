@@ -128,7 +128,7 @@ TCPRequests = ("SREAD", # Reads a single value from all sensors
                "STAT", # Returns number of sensors and types
                )
 
-wlan = wt.connectWifi("propnet", "propteambestteam")
+wlan = wt.connectWifi("Nolito", "6138201079")
 
 config = readConfig(CONFIG_FILE)
 sensors = initializeFromConfig(config)
