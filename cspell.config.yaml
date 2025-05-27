@@ -4,9 +4,12 @@ dictionaryDefinitions: []
 dictionaries: []
 words:
   - absjoin
+  - COMXX
   - DGRAM
   - DUMBASS
   - ECONNRESET
+  - Espressif
+  - esptool
   - essid
   - figsize
   - getch
@@ -14,19 +17,27 @@ words:
   - kbhit
   - labjack
   - libqretprop
+  - microcontroller
+  - microcontrollers
   - micropython
   - Modbus
   - mpremote
   - Nikhil
   - osdebug
+  - OSRAM
+  - pinout
+  - PSRAM
   - pyproject
   - pyqtgraph
   - QRET
   - qretproptools
+  - QSPI
   - REUSEADDR
   - showlegend
   - skiprows
+  - SPIRAM
   - teststand
+  - USBC
   - webrepl
   - WLAN
   - xaxes
