@@ -3,6 +3,7 @@ import socket  # noqa: TCH003 -- Typing not a library within micropython, cant p
 
 import ujson  # type:ignore # ujson and machine are micropython libraries
 
+from SSDPListener import SSDPListener
 from TCPHandler import TCPHandler
 from UDPListener import UDPListener
 
@@ -11,10 +12,13 @@ class AsyncManager:
     def __init__(self,
                  udpListener: UDPListener,
                  tcpListener: TCPHandler,
+                 SSDPListener: SSDPListener,
                  configDict: dict) -> None:
 
-        self.udpListener = udpListener
-        self.tcpListener = tcpListener
+        self.udpListener    = udpListener
+        self.tcpListener    = tcpListener
+        self.ssdpListener   = SSDPListener
+
         self.configDict = configDict
         self.running = False
 

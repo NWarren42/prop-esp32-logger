@@ -15,6 +15,7 @@ import wifi_tools as wt
 from AsyncManager import AsyncManager
 from TCPHandler import TCPHandler
 from UDPListener import UDPListener
+from SSDPListener import SSDPListener
 from machine import Pin  # type: ignore # machine is a micropython library
 from machine import I2C  # type: ignore # machine is a micropython library
 
@@ -133,9 +134,12 @@ wlan = wt.connectWifi("Nolito", "6138201079")
 config = readConfig(CONFIG_FILE)
 sensors = initializeFromConfig(config)
 
+# Initialize the UDP, TCP, and SSDP listeners
 udpListener = UDPListener(port=40000)
 tcpListener = TCPHandler(sensors, port=50000)
-server = AsyncManager(udpListener, tcpListener, config)
+ssdpListener = SSDPListener()
+
+server = AsyncManager(udpListener, tcpListener, ssdpListener, config)
 
 ## I2C Setup
 # The Pins NEED to be set to OUT. For some reason the I2C bus doesn't automatically set this on initialization of the bus.

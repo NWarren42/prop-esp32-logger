@@ -10,7 +10,7 @@ class UDPListener:
         self.udpSocket.bind(("", self.port))
         print("UDP Listener initialized on port", self.port)
 
-    def handleMessage(self, data: bytes, address: str, activeServerPort: int) -> None:  # type: ignore # noqa: ANN001 # createNewServerCallback is a function is a function. No typing module in micropython to specify "Callable"
+    def handleMessage(self, data: bytes, address: str, activeServerPort: int) -> None:  # type: ignore # createNewServerCallback is a function is a function. No typing module in micropython to specify "Callable"
         if data.decode("utf-8") == "SEARCH":
             response = f"ACK:{activeServerPort}"
             self.udpSocket.sendto(response.encode("utf-8"), (address[0], self.port))
