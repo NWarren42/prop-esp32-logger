@@ -9,12 +9,17 @@ def inet_aton(ip: str) -> bytes: return struct.pack("BBBB", *[int(x) for x in ip
 class SSDPListener:
     """A class to create an SSDP listener socket."""
 
-    def __init__(self, multicastAddress: str = "239.255.255.250"):
-        self.multicastAddress = multicastAddress
+    def __init__(self,
+                 onDiscovery,  # noqa: ANN001 # Callback not typed due to micropython limitations
+                 ):
+        self.multicastAddress = "239.255.255.250"
         self.port = 1900
         self.ssdpSocket = self._createSSDPSocket()
 
-    def HandleSSDPMessage(self, data: bytes, address: tuple, activeServerPort: int) -> None:
+        self.onDiscovery = onDiscovery  # Callback function that
+
+
+    def HandleSSDPMessage(self, data: bytes, address: str, sock: socket.socket) -> None:
         """Handle incoming SSDP messages.
 
         Respond to M-SEARCH requests by sending the config
@@ -25,19 +30,18 @@ class SSDPListener:
         """
         message = data.decode("utf-8")
 
-        if message.startswith("M-SEARCH"):
-            print(f"Received M-SEARCH from {address}: {message}")
+        method, headers = self._parseMSearch(message)  # Parse the M-SEARCH message, but we don't use the result here
 
-            # Prepare the config response
-            jStringConfig = ujson.dumps({"activeServerPort": activeServerPort})
-            confString = "CONF" + jStringConfig + "\n"
+        isMSearch = method == "M-SEARCH"
 
-            # Send the config directly to the sender's address and port via UDP
-            self.ssdpSocket.sendto(confString.encode("utf-8"), address)
-            print(f"Sent config to {address}")
-        else:
-            print(f"Received unknown message on SSDP port from {address}: {message}")
+        if isMSearch: # First check if the message is an M-SEARCH request
+            # Now that we know it will have M-SEARCH headers, we can check for the specific headers we care about
+            isDiscover      = headers["man"]    == '"ssdp:discover"'
+            isForPropESP32  = headers.get("st") == "urn:qretprop:service:espdevice:1"
 
+            if isDiscover and isForPropESP32:
+                print(f"Received M-SEARCH from {address}:\n{message}")
+                self.onDiscovery(sock) # The callback function needs only the socket to send the response back to the client.
 
     def _createSSDPSocket(self) -> socket.socket:
         """Create and return a UDP socket bound to the SSDP multicast group."""
@@ -50,7 +54,7 @@ class SSDPListener:
                         1,                   # Set the option value to 1 (true)
                         )
 
-        sock.bind((self.multicastAddress, self.port))
+        sock.bind(("0.0.0.0", self.port))
 
         # Joining the multicast group
         membershipRequest: bytes = struct.pack(
@@ -68,5 +72,16 @@ class SSDPListener:
         print(f"SSDP Listener socket initialized on {self.multicastAddress}:{self.port}")
         return sock
 
+    def _parseMSearch(self, searchMessage: str) -> (str, dict): # type: ignore
+        """Parse the M-SEARCH message and return a dictionary of parameters."""
+        lines = searchMessage.split("\r\n")
+        method, _uri, _version = lines[0].split(" ", 2) # First line is formatted as <"M-SEARCH * HTTP/1.1">
+        headers = {}
+        for line in lines[1:]:
+            if not line:
+                break
+            name, val = line.split(":", 1)
+            headers[name.lower().strip()] = val.strip()
+        return method, headers
 
 

@@ -29,7 +29,7 @@ class TCPHandler:
     made to the ESP32 over TCP. The TCPHandler can process any incoming message to a socket
 
     """
-    def __init__(self, sensors, port: int) -> None:
+    def __init__(self, sensors, port: int = 50000) -> None:  # noqa: ANN001
         self.sensors = sensors
         self.port = port
 
@@ -72,15 +72,7 @@ class TCPHandler:
 
             # GETS is a command to get a single reading from each of the sensors
             if cmd == "GETS":
-                # allData = []
-                # print(self.sensors) # Debugging line to see in what order the sensors are being read
-                # for sensor in self.sensors:
-                #     # ONLY READING VOLTAGE FOR NOW WHILE NO DEVICES CONNECTED
-                #     sensorData = sensor.takeData('V') # The sensor object handles the conversion. The only argument is the unit you want back.
-                #     sensor.data.append(sensorData)  # Add the collected data to the sensor's internal data list.
-                #     print(f"Sensor {sensor.name} data: {sensorData} V") # Print the data for debugging FIXED IN VOLTS
-                #     allData.append(sensorData)  # Append the data to the list to send back to the client
-                # response = "DATA" + f"{allData}".strip("[]") + "\n" # Convert the list to a string for sending. We need to strip the brackets off the list so that it is a comma separated string.
+
                 clientSocket.sendall(self.getStreamPacket())  # Send the data back to the client
 
             # STRM is a command to start streaming data from the sensors

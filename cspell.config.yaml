@@ -38,6 +38,7 @@ words:
   - skiprows
   - SPIRAM
   - ssdp
+  - STRM
   - teststand
   - USBC
   - webrepl

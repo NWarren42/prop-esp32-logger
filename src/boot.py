@@ -10,18 +10,20 @@
 
 
 import ujson  # type:ignore # noqa: I001# ujson and machine are micropython libraries
+import enum
 
 import wifi_tools as wt
 from AsyncManager import AsyncManager
-from TCPHandler import TCPHandler
-from UDPListener import UDPListener
-from SSDPListener import SSDPListener
 from machine import Pin  # type: ignore # machine is a micropython library
 from machine import I2C  # type: ignore # machine is a micropython library
 
-from sensors.Thermocouple import Thermocouple # type: ignore # don't need __init__ for micropython
-from sensors.PressureTransducer import PressureTransducer # type: ignore
-from sensors.LoadCell import LoadCell # type: ignore
+class DeviceState(enum.Enum):
+    """Enum for the state of the device."""
+    INIT = 0        # Device is initializing
+    WAITING = 1     # Device is waiting for a master to connect
+    READY = 2       # Device has a master connected and is waiting for commands
+    STREAMING = 3   # Device is streaming data to a master
+    ERROR = 4       # Device has encountered an error. Will default to WAITING state after error is resolved.
 
 CONFIG_FILE = "ESPConfig.json"
 
@@ -33,55 +35,6 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
     except Exception as e:
         print(f"Failed to read config file: {e}")
         return {}
-
-def initializeFromConfig(config) -> list[Thermocouple | LoadCell | PressureTransducer]: # type: ignore  # noqa: ANN001 # Typing for the JSON object is impossible without the full Typing library
-    """Initialize all devices and sensors from the config file.
-
-    ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
-    connection to an external ADC.
-    """
-    sensors: list[Thermocouple | LoadCell | PressureTransducer] = []
-
-    print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
-    deviceType = config.get("deviceType", "Unknown")
-
-    if deviceType == "Sensor Monitor": # Sensor monitor is what I'm calling an ESP32 that reads sensors
-        sensorInfo = config.get("sensorInfo", {})
-
-        for name, details in sensorInfo.get("thermocouples", {}).items():
-            sensors.append(Thermocouple(name=name,
-                                        ADCIndex=details["ADCIndex"],
-                                        highPin=details["highPin"],
-                                        lowPin=details["lowPin"],
-                                        thermoType=details["type"],
-                                        units=details["units"],
-                                        ))
-
-        for name, details in sensorInfo.get("pressureTransducers", {}).items():
-            sensors.append(PressureTransducer(name=name,
-                                              ADCIndex=details["ADCIndex"],
-                                              pinNumber=details["pin"],
-                                              maxPressure_PSI=details["maxPressure_PSI"],
-                                              units=details["units"],
-                                              ))
-
-        for name, details in sensorInfo.get("loadCells", {}).items():
-            sensors.append(LoadCell(name=name,
-                                    ADCIndex=details["ADCIndex"],
-                                    highPin=details["highPin"],
-                                    lowPin=details["lowPin"],
-                                    loadRating_N=details["loadRating_N"],
-                                    excitation_V=details["excitation_V"],
-                                    sensitivity_vV=details["sensitivity_vV"],
-                                    units=details["units"],
-                                    ))
-
-        return sensors
-
-    if deviceType == "Unknown":
-        raise ValueError("Device type not specified in config file")
-
-    return []
 
 def readRegister(i2cBus: I2C, address: int, register: int) -> bytes:
     """Read a 8-bit register from the ADS112C04.
@@ -120,6 +73,26 @@ def readRegister(i2cBus: I2C, address: int, register: int) -> bytes:
     # The data is returned as a byte object, so we need to convert it to an integer. Use big scheme because MSB is first transmitted.
     return data
 
+def setupI2C() -> object: # Return object since I don't know the type of the I2C bus object in micropython
+    """Set up the I2C bus with the correct pins and frequency.
+
+    This function doesn't need input parameters because the pins and frequency are set by the hardware configuration,
+    and will never need to change.
+    The SCL pin is GPIO 6 on the ESP32, and the SDA pin is GPIO 7 on the ESP32.
+
+
+
+    """
+
+    # The Pins NEED to be set to OUT. For some reason the I2C bus doesn't automatically set this on initialization of the bus.
+    sclPin = Pin(6, Pin.OUT) # SCL pin is GPIO 6 on the ESP32. This connects to pin 16 on the ADC
+    sdaPin = Pin(7, Pin.OUT) # SDA pin is GPIO 7 on the ESP32. This connects to pin 15 on the ADC -- THIS MIGHT BE PROBLEMATIC, CANT READ SDA?
+
+    # I2C bus 1, SCL pin 6, SDA pin 7, frequency 100kHz
+    i2cBus = I2C(1, scl=sclPin, sda=sdaPin, freq=100000)
+    return i2cBus
+
+
 UDPRequests = ("SEARCH", # Message received when server is searching for client sensors
                )
 
@@ -129,29 +102,22 @@ TCPRequests = ("SREAD", # Reads a single value from all sensors
                "STAT", # Returns number of sensors and types
                )
 
+state = DeviceState.INIT  # Device is initializing
+
+# Internal setup methods
+config = readConfig(CONFIG_FILE)
 wlan = wt.connectWifi("Nolito", "6138201079")
 
-config = readConfig(CONFIG_FILE)
-sensors = initializeFromConfig(config)
-
-# Initialize the UDP, TCP, and SSDP listeners
-udpListener = UDPListener(port=40000)
-tcpListener = TCPHandler(sensors, port=50000)
-ssdpListener = SSDPListener()
-
-server = AsyncManager(udpListener, tcpListener, ssdpListener, config)
-
 ## I2C Setup
-# The Pins NEED to be set to OUT. For some reason the I2C bus doesn't automatically set this on initialization of the bus.
-sclPin = Pin(6, Pin.OUT) # SCL pin is GPIO 6 on the ESP32. This connects to pin 16 on the ADC
-sdaPin = Pin(7, Pin.OUT) # SDA pin is GPIO 7 on the ESP32. This connects to pin 15 on the ADC -- THIS MIGHT BE PROBLEMATIC, CANT READ SDA?
 
-# I2C bus 1, SCL pin 6, SDA pin 7, frequency 100kHz
-i2cBus = I2C(1, scl=sclPin, sda=sdaPin, freq=100000)
+
+
 
 devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list of addresses of devices on the bus.
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
+# The AsyncManager is the main server that handles all incoming requests and manages the sensors.
+server = AsyncManager(config)
 
 # Current state is that you must enter mpremote and run the main() function to start the server.
 def main() -> None:
