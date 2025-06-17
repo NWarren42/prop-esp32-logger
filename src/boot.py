@@ -220,6 +220,8 @@ async def main(state: int) -> None:
 
     clientSock = None  # Initialize client socket to None
 
+    print("Starting server...")
+
     while True:
 
         # ------------- #
@@ -241,6 +243,7 @@ async def main(state: int) -> None:
                 print(f"Sent config to server at {serverIp}:{TCP_PORT}")
 
                 state = READY
+                print("Connected to server and sent config. Now in READY state.")
             except Exception as e:
                 print(f"Error connecting to server or sending config: {e}")
                 if clientSock:
