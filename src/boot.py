@@ -188,6 +188,7 @@ TCPRequests = ("SREAD", # Reads a single value from all sensors
 #   SETUP THE DEVICE
 # -------------------- #
 state = INIT  # Device is initializing
+print("State = INIT")
 
 # Internal setup methods
 config = readConfig(CONFIG_FILE)
@@ -195,8 +196,8 @@ sensors = setupDeviceFromConfig(config)  # Initialize sensors from config file
 
 # Networking setup
 wlan        = wt.connectWifi("Nolito", "6138201079")
-ssdpSocket  = SSDPTools.createSSDPSocket() # Use the default multicast address and port defined in SSDPTools.py
-tcpSocket   = TCPTools.createTCPSocket()
+ssdpListenerSocket  = SSDPTools.createSSDPSocket() # Use the default multicast address and port defined in SSDPTools.py
+tcpListenerSocket   = TCPTools.createServerTCPSocket()
 
 ## I2C Setup
 i2cBus = setupI2C()
@@ -204,10 +205,9 @@ devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list 
 
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
-# The main event loop lives inside the main() function.
-# Current state is that you must enter mpremote and run the main() function to start the server.
 
 state = WAITING  # Device is waiting for a master to connect
+print("State = WAITING")
 
 def run() -> None:
     """Run the main event loop."""
@@ -218,7 +218,11 @@ def run() -> None:
 
 async def main(state: int) -> None:
 
-    clientSock = None  # Initialize client socket to None
+    clientSock = None
+    serverIp = None
+
+    # Let whatever tripped an error state set an error message for the error state event loop to catch.
+    errorMessage = ""
 
     print("Starting server...")
 
@@ -228,8 +232,27 @@ async def main(state: int) -> None:
         # WAITING STATE #
         # ------------- #
         if state == WAITING:
-            serverIp = await SSDPTools.waitForDiscovery(ssdpSocket)
-            print(f"Discovery message received from server at {serverIp}.")
+
+            # The code supports both SSDP and direct TCP discovery. This is primarily for being able to work within WSL
+            # where SSDP discovery doesn't work, but also convenient to be able to directly target specific devices
+
+            # Fire off async tasks to monitor both SSDP and TCP sockets
+            ssdpTask = asyncio.create_task(SSDPTools.waitForDiscovery(ssdpListenerSocket))
+            tcpTask  = asyncio.create_task(TCPTools.waitForConnection(tcpListenerSocket))
+
+            while serverIp is None:
+                if ssdpTask.done():
+                    serverIp = await ssdpTask
+                    print(f"Discovery message received over SSDP from {serverIp}.")
+
+                    tcpTask.cancel()
+                elif tcpTask.done():
+                    serverIp = await tcpTask
+                    print(f"Discovery message received over TCP from {serverIp}.")
+
+                    ssdpTask.cancel()
+                else:
+                    await asyncio.sleep(0.05)
 
             try:
                 # Create a TCP client socket and connect to the server
@@ -243,13 +266,16 @@ async def main(state: int) -> None:
                 print(f"Sent config to server at {serverIp}:{TCP_PORT}")
 
                 state = READY
-                print("Connected to server and sent config. Now in READY state.")
+                print("Connected to server and sent config.")
+                print("State = READY")
+            except OSError: # OS Error will primarily be raised if the server is not available for connection.
+                errorMessage = "OSError: Unable to connect to server. Is the server running?"
+                state = ERROR
+                continue
             except Exception as e:
-                print(f"Error connecting to server or sending config: {e}")
-                if clientSock:
-                    clientSock.close()
-                clientSock = None
-                state = WAITING  # Reset state to waiting for a master to connect
+                errorMessage = f"Error connecting to server: {e}"
+                state = ERROR  # Reset state to waiting for a master to connect
+                continue
 
         # ------------- #
         #  READY STATE  #
@@ -258,11 +284,29 @@ async def main(state: int) -> None:
             cmd = await TCPTools.waitForCommand(clientSock)
 
             if not cmd:
-                print("Server closed connection or there was an error. Resetting to WAITING state.")
+                errorMessage = "Empty message received. Server closed connection or there was an error."
+                state = ERROR
+                continue
+
+            print(f"Received command: {cmd}")
+
+        # ------------- #
+        #  ERROR STATE  #
+        # ------------- #
+
+        # The error state will handle all the potential cleanup so we can just reset the state to WAITING afterwards.
+        # Any error that we are catching should probably trigger an error state, so we can reset the device and try again.
+
+        if state == ERROR:
+            print(f"ERROR STATE:\n{errorMessage}\nResetting to WAITING state.")
+            if clientSock:
                 clientSock.close()
-                clientSock = None
-                state = WAITING
-            else:
-                print(f"Received command: {cmd}")
+
+            # Reset the sockets and variables to kill any existing connections or attempts to connect.
+            clientSock = None
+            serverIp = None
+
+            state = WAITING
+            errorMessage = ""  # Reset the error message
 
         await asyncio.sleep(0)  # Yield to event loop

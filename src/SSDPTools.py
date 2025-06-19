@@ -50,13 +50,11 @@ def _parseSSDPMessage(search_message: str) -> tuple[str, dict[str, str]]:
         headers[name.lower().strip()] = val.strip()
     return method, headers
 
-async def waitForDiscovery(sock: socket.socket) -> str:
+async def waitForDiscovery(listenerSock: socket.socket) -> str:
     """Wait for a valid SSDP discovery message and return the sender's ip address."""
-    loop = asyncio.get_event_loop() # get_running_loop() is not available in micropython so we use get_event_loop()
-
     while True:
         try:
-            data, address = sock.recvfrom(1024) # Non-blocking only if the socket is set to non-blocking mode
+            data, address = listenerSock.recvfrom(1024) # Non-blocking only if the socket is set to non-blocking mode
             message = data.decode("utf-8")
             method, headers = _parseSSDPMessage(message)
 
