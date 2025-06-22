@@ -93,6 +93,10 @@ def setupDeviceFromConfig(config) -> list[Thermocouple |
 
         return []
 
+# --------------------- #
+#    I2C FUNCTIONS
+# --------------------- #
+
 def readRegister(i2cBus: I2C, address: int, register: int) -> bytes:
     """Read a 8-bit register from the ADS112C04.
 
@@ -197,9 +201,9 @@ sensors = setupDeviceFromConfig(config)  # Initialize sensors from config file
 # Networking setup
 wlan        = wt.connectWifi("Nolito", "6138201079")
 ssdpListenerSocket  = SSDPTools.createSSDPSocket() # Use the default multicast address and port defined in SSDPTools.py
-tcpListenerSocket   = TCPTools.createServerTCPSocket()
+tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
-## I2C Setup
+# I2C Setup
 i2cBus = setupI2C()
 devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list of addresses of devices on the bus.
 
@@ -217,6 +221,7 @@ def run() -> None:
         print("Stopping server gracefully...")
 
 async def main(state: int) -> None:
+    global ssdpListenerSocket, tcpListenerSocket
 
     clientSock = None
     serverIp = None
@@ -235,6 +240,12 @@ async def main(state: int) -> None:
 
             # The code supports both SSDP and direct TCP discovery. This is primarily for being able to work within WSL
             # where SSDP discovery doesn't work, but also convenient to be able to directly target specific devices
+
+            # Re-create listener sockets for each discovery cycle only if not already active
+            if ssdpListenerSocket is None:
+                ssdpListenerSocket = SSDPTools.createSSDPSocket()
+            if tcpListenerSocket is None:
+                tcpListenerSocket = TCPTools.createListenerTCPSocket()
 
             # Fire off async tasks to monitor both SSDP and TCP sockets
             ssdpTask = asyncio.create_task(SSDPTools.waitForDiscovery(ssdpListenerSocket))
@@ -255,8 +266,8 @@ async def main(state: int) -> None:
                     await asyncio.sleep(0.05)
 
             try:
-                # Create a TCP client socket and connect to the server
-                clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # Create a TCP client socket and connect to the server that sent out a discovery message.
+                clientSock = TCPTools.createClientTCPSocket()
                 clientSock.connect((serverIp, TCP_PORT))
 
                 # Prepare and send config file
@@ -296,17 +307,23 @@ async def main(state: int) -> None:
 
         # The error state will handle all the potential cleanup so we can just reset the state to WAITING afterwards.
         # Any error that we are catching should probably trigger an error state, so we can reset the device and try again.
-
         if state == ERROR:
             print(f"ERROR STATE:\n{errorMessage}\nResetting to WAITING state.")
             if clientSock:
                 clientSock.close()
+            if ssdpListenerSocket:
+                ssdpListenerSocket.close()
+                ssdpListenerSocket = None
+            if tcpListenerSocket:
+                tcpListenerSocket.close()
+                tcpListenerSocket = None
 
             # Reset the sockets and variables to kill any existing connections or attempts to connect.
             clientSock = None
             serverIp = None
 
             state = WAITING
+            errorMessage = ""  # Reset the error message
             errorMessage = ""  # Reset the error message
 
         await asyncio.sleep(0)  # Yield to event loop

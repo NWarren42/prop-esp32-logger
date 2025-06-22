@@ -5,7 +5,7 @@ import uasyncio as asyncio  # type: ignore
 
 TCP_PORT = 50000  # Standard TCP port for ESP32 devices
 
-def createServerTCPSocket() -> socket.socket:
+def createListenerTCPSocket() -> socket.socket:
     """Create a TCP socket and bind it to the TCP port."""
     tcpSocket = socket.socket(socket.AF_INET,       # IPv4 socket
                               socket.SOCK_STREAM)   # TCP socket
@@ -43,6 +43,10 @@ async def waitForConnection(listenerSock: socket.socket) -> str:
             _, address = listenerSock.accept()
 
             print(f"Connection accepted from {address}")
+
+            # This socket is only meant to be used for discovery, so we close it after accepting the connection.
+            listenerSock.close()
+
             return address[0]  # Return only the IP address of the client
         except OSError:
             # EAGAIN is raised when no data is available to read from the socket, just ignore this.
