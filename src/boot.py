@@ -200,7 +200,7 @@ sensors = setupDeviceFromConfig(config)  # Initialize sensors from config file
 
 # Networking setup
 wlan        = wt.connectWifi("Nolito", "6138201079")
-ssdpListenerSocket  = SSDPTools.createSSDPSocket() # Use the default multicast address and port defined in SSDPTools.py
+ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
 tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
 # I2C Setup
@@ -215,16 +215,22 @@ print("State = WAITING")
 
 def run() -> None:
     """Run the main event loop."""
+
     try:
-        asyncio.run(main(state))  # Start the main event loop with the initial state
+        # Start the main event loop with the initial state
+        asyncio.run(main(state))
     except KeyboardInterrupt:
         print("Stopping server gracefully...")
 
-async def main(state: int) -> None:
-    global ssdpListenerSocket, tcpListenerSocket
 
+async def main(state: int) -> None:
+    global tcpListenerSocket
+
+    # Set up some variables for the server state
     clientSock = None
-    serverIp = None
+
+    # Fire off the SSDP listener task to send out pings if it receives a discovery message.
+    ssdpTask = asyncio.create_task(SSDPTools.waitForDiscovery())
 
     # Let whatever tripped an error state set an error message for the error state event loop to catch.
     errorMessage = ""
@@ -237,58 +243,32 @@ async def main(state: int) -> None:
         # WAITING STATE #
         # ------------- #
         if state == WAITING:
+            print("Waiting for a master to connect...")
 
-            # The code supports both SSDP and direct TCP discovery. This is primarily for being able to work within WSL
-            # where SSDP discovery doesn't work, but also convenient to be able to directly target specific devices
-
-            # Re-create listener sockets for each discovery cycle only if not already active
-            if ssdpListenerSocket is None:
-                ssdpListenerSocket = SSDPTools.createSSDPSocket()
+            # Ensure we have a listening socket
             if tcpListenerSocket is None:
                 tcpListenerSocket = TCPTools.createListenerTCPSocket()
 
-            # Fire off async tasks to monitor both SSDP and TCP sockets
-            ssdpTask = asyncio.create_task(SSDPTools.waitForDiscovery(ssdpListenerSocket))
-            tcpTask  = asyncio.create_task(TCPTools.waitForConnection(tcpListenerSocket))
-
-            while serverIp is None:
-                if ssdpTask.done():
-                    serverIp = await ssdpTask
-                    print(f"Discovery message received over SSDP from {serverIp}.")
-
-                    tcpTask.cancel()
-                elif tcpTask.done():
-                    serverIp = await tcpTask
-                    print(f"Discovery message received over TCP from {serverIp}.")
-
-                    ssdpTask.cancel()
-                else:
-                    await asyncio.sleep(0.05)
-
             try:
-                print(f"Attempting to connect to server at {serverIp}:{TCP_PORT}")
-                # Create a TCP client socket and connect to the server that sent out a discovery message.
-                clientSock = TCPTools.createClientTCPSocket()
-                print("Created client socket.")
-                clientSock.connect((serverIp, TCP_PORT))
-                print(f"Connected to server at {serverIp}:{TCP_PORT}")
+                # Wait for incoming TCP connection
+                clientSock, clientAddr = await TCPTools.waitForConnection(tcpListenerSocket)
 
-                # Prepare and send config file
+                # Send config to newly connected client
                 jStringConfig = ujson.dumps(config)
                 confString = "CONF" + jStringConfig + "\n"
                 clientSock.sendall(confString.encode("utf-8"))
-                print(f"Sent config to server at {serverIp}:{TCP_PORT}")
+                print(f"Sent config to client at {clientAddr}")
 
                 state = READY
-                print("Connected to server and sent config.")
                 print("State = READY")
-            except OSError as e: # OS Error will primarily be raised if the server is not available for connection.
-                errorMessage = f"OSError: Unable to connect to server. Is the server running? : {e}"
+
+            except OSError as e:
+                errorMessage = f"Network error: {e}"
                 state = ERROR
                 continue
             except Exception as e:
-                errorMessage = f"Error connecting to server: {e}"
-                state = ERROR  # Reset state to waiting for a master to connect
+                errorMessage = f"Error in WAITING state: {e}"
+                state = ERROR
                 continue
 
         # ------------- #
@@ -316,19 +296,11 @@ async def main(state: int) -> None:
                 clientSock.close()
                 clientSock = None
                 print("Closed client socket.")
-            if ssdpListenerSocket:
-                ssdpListenerSocket.close()
-                ssdpListenerSocket = None
-            if tcpListenerSocket:
-                tcpListenerSocket.close()
-                tcpListenerSocket = None
 
             # Reset the sockets and variables to kill any existing connections or attempts to connect.
             clientSock = None
-            serverIp = None
 
             state = WAITING
-            errorMessage = ""  # Reset the error message
             errorMessage = ""  # Reset the error message
 
         await asyncio.sleep(0)  # Yield to event loop

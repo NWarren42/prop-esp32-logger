@@ -25,44 +25,49 @@ def createClientTCPSocket() -> socket.socket:
                          socket.SO_REUSEADDR,   # Reuseable option
                          1)                     # Set to true
 
+    tcpSocket.setblocking(False)
+
     return tcpSocket
 
-async def waitForConnection(listenerSock: socket.socket) -> str:
-    """Wait for a connection on the TCP socket and returns the address the server that sent the search out.
+async def waitForConnection(listenerSock: socket.socket) -> tuple[socket.socket, tuple[str, int]]:
+    """Wait for a TCP connection and return the client socket and address.
 
-    The device supports both TCP and SSDP discovery and it is assumed that if anything comes in directly to this TCP
-    socket it already knows that it is talking to the device and does not need to send a discovery message.
-
+    Returns:
+        tuple: (client_socket, address)
+            - client_socket: Socket for communication with the connected client
+            - address: Tuple of (ip_address, port) of the connected client
     """
     while True:
         try:
-            # Accept a connection and return only the address of the client. The device will reach out to the client
-            # directly after this to make a connection.
+            # Accept returns (client_socket, address)
+            # where address is (ip, port)
+            client_socket, address = listenerSock.accept()
+            print(f"Connection accepted from {address[0]}:{address[1]}")
 
-            _, address = listenerSock.accept()
+            # Set client socket to non-blocking for async operations
+            client_socket.setblocking(False)
 
-            print(f"Connection accepted from {address}")
+            return client_socket, address
 
-            # This socket is only meant to be used for discovery, so we close it after accepting the connection.
-            listenerSock.close()
-
-            return address[0]  # Return only the IP address of the client
         except OSError:
-            # EAGAIN is raised when no data is available to read from the socket, just ignore this.
+            # EAGAIN is raised when no data is available
             await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"TCPTools waitForDiscovery error: {e}")
+            print(f"TCPTools waitForConnection error: {e}")
             await asyncio.sleep(0.1)
 
 
 
 async def waitForCommand(serverSock: socket.socket) -> str:
     """Wait for a command to come in on the TCP socket and yields the command as a string."""
-    loop = asyncio.get_event_loop() # get_running_loop() is not available in micropython so we use get_event_loop()
-
-    try:
-        data = await loop.sock_recv(serverSock, 1024)  # Receive up to 1024 bytes
-        return data.decode("utf-8").strip()  # Decode bytes to string and strip whitespace
-    except Exception as e:
-        print(f"Error in waitForCommand: {e}")
-        return ""
+    while True:
+        try:
+            data = serverSock.recv(1024)  # Try to receive up to 1024 bytes
+            if data:
+                return data.decode("utf-8").strip()
+        except OSError:
+            # No data available yet, yield to other tasks
+            await asyncio.sleep(0.1)
+        except Exception as e:
+            print(f"Error in waitForCommand: {e}")
+            return ""
