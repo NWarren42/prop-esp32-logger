@@ -41,11 +41,15 @@ def createSSDPSocket(multicast_address: str = MULTICAST_ADDRESS, port: int = POR
 
 def _parseSSDPMessage(search_message: str) -> tuple[str, dict[str, str]]:
     lines = search_message.split("\r\n")
-    method, _uri, _version = lines[0].split(" ", 2)
+    if not lines or len(lines[0].split(" ", 2)) < 3:
+        raise ValueError("Malformed SSDP message: missing request line parts")
+    method, _uri, _version = lines[0].split(" ", 2) # Looking for "M-SEARCH * HTTP/1.1" or similar
     headers = {}
     for line in lines[1:]:
         if not line:
             break
+        if ": " not in line:
+            continue
         name, val = line.split(":", 1)
         headers[name.lower().strip()] = val.strip()
     return method, headers

@@ -24,8 +24,7 @@ def createClientTCPSocket() -> socket.socket:
     tcpSocket.setsockopt(socket.SOL_SOCKET,     # Socket level
                          socket.SO_REUSEADDR,   # Reuseable option
                          1)                     # Set to true
-    tcpSocket.setblocking(False)
-    tcpSocket.bind(("", TCP_PORT))  # Bind to all interfaces
+
     return tcpSocket
 
 async def waitForConnection(listenerSock: socket.socket) -> str:

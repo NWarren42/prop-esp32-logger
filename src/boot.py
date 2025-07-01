@@ -266,9 +266,12 @@ async def main(state: int) -> None:
                     await asyncio.sleep(0.05)
 
             try:
+                print(f"Attempting to connect to server at {serverIp}:{TCP_PORT}")
                 # Create a TCP client socket and connect to the server that sent out a discovery message.
                 clientSock = TCPTools.createClientTCPSocket()
+                print("Created client socket.")
                 clientSock.connect((serverIp, TCP_PORT))
+                print(f"Connected to server at {serverIp}:{TCP_PORT}")
 
                 # Prepare and send config file
                 jStringConfig = ujson.dumps(config)
@@ -279,8 +282,8 @@ async def main(state: int) -> None:
                 state = READY
                 print("Connected to server and sent config.")
                 print("State = READY")
-            except OSError: # OS Error will primarily be raised if the server is not available for connection.
-                errorMessage = "OSError: Unable to connect to server. Is the server running?"
+            except OSError as e: # OS Error will primarily be raised if the server is not available for connection.
+                errorMessage = f"OSError: Unable to connect to server. Is the server running? : {e}"
                 state = ERROR
                 continue
             except Exception as e:
@@ -311,6 +314,8 @@ async def main(state: int) -> None:
             print(f"ERROR STATE:\n{errorMessage}\nResetting to WAITING state.")
             if clientSock:
                 clientSock.close()
+                clientSock = None
+                print("Closed client socket.")
             if ssdpListenerSocket:
                 ssdpListenerSocket.close()
                 ssdpListenerSocket = None
