@@ -36,8 +36,9 @@ class Thermocouple:
             to "DEF". If "DEF" is specified, the units will be the same as the
             units specified in the config file. Currently V is the only valid call.
         """
+
         if units == "DEF":
-            units = self.units
+            units = "V"
 
         vReading = self.highPin.read() - self.lowPin.read()
         if units == "V":

@@ -5,6 +5,11 @@ import uasyncio as asyncio  # type: ignore
 
 TCP_PORT = 50000  # Standard TCP port for ESP32 devices
 
+class ConnectionClosedError(Exception):
+    """Raised when the remote peer closes the connection."""
+    pass
+
+
 def createListenerTCPSocket() -> socket.socket:
     """Create a TCP socket and bind it to the TCP port."""
     tcpSocket = socket.socket(socket.AF_INET,       # IPv4 socket
@@ -62,12 +67,16 @@ async def waitForCommand(serverSock: socket.socket) -> str:
     """Wait for a command to come in on the TCP socket and yields the command as a string."""
     while True:
         try:
-            data = serverSock.recv(1024)  # Try to receive up to 1024 bytes
-            if data:
-                return data.decode("utf-8").strip()
+            data = serverSock.recv(1024)
+            if not data:  # Socket was closed by peer
+                serverSock.close()
+                raise ConnectionClosedError("Connection closed by peer")
+            return data.decode("utf-8").strip()
+
         except OSError:
             # No data available yet, yield to other tasks
             await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"Error in waitForCommand: {e}")
-            return ""
+            if not isinstance(e, ConnectionClosedError):
+                print(f"Error in waitForCommand: {e}")
+            raise

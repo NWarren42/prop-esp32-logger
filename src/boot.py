@@ -22,6 +22,7 @@ from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
 import SSDPTools
 import TCPTools
+import commands
 
 
 INIT = 0        # Device is initializing
@@ -220,7 +221,7 @@ def run() -> None:
         # Start the main event loop with the initial state
         asyncio.run(main(state))
     except KeyboardInterrupt:
-        print("Stopping server gracefully...")
+        print("Server stopped gracefully...")
 
 
 async def main(state: int) -> None:
@@ -239,68 +240,93 @@ async def main(state: int) -> None:
 
     while True:
 
-        # ------------- #
-        # WAITING STATE #
-        # ------------- #
-        if state == WAITING:
-            print("Waiting for a master to connect...")
+        try:
 
-            # Ensure we have a listening socket
-            if tcpListenerSocket is None:
-                tcpListenerSocket = TCPTools.createListenerTCPSocket()
+            # ------------- #
+            # WAITING STATE #
+            # ------------- #
+            if state == WAITING:
+                print("Waiting for a master to connect...")
 
-            try:
-                # Wait for incoming TCP connection
-                clientSock, clientAddr = await TCPTools.waitForConnection(tcpListenerSocket)
+                # Ensure we have a listening socket
+                if tcpListenerSocket is None:
+                    tcpListenerSocket = TCPTools.createListenerTCPSocket()
 
-                # Send config to newly connected client
-                jStringConfig = ujson.dumps(config)
-                confString = "CONF" + jStringConfig + "\n"
-                clientSock.sendall(confString.encode("utf-8"))
-                print(f"Sent config to client at {clientAddr}")
+                try:
+                    # Wait for incoming TCP connection
+                    clientSock, clientAddr = await TCPTools.waitForConnection(tcpListenerSocket)
 
-                state = READY
-                print("State = READY")
+                    # Send config to newly connected client
+                    jStringConfig = ujson.dumps(config)
+                    confString = "CONF" + jStringConfig + "\n"
+                    clientSock.sendall(confString.encode("utf-8"))
+                    print(f"Sent config to client at {clientAddr}")
 
-            except OSError as e:
-                errorMessage = f"Network error: {e}"
-                state = ERROR
-                continue
-            except Exception as e:
-                errorMessage = f"Error in WAITING state: {e}"
-                state = ERROR
-                continue
+                    state = READY
+                    print("State = READY")
 
-        # ------------- #
-        #  READY STATE  #
-        # ------------- #
-        if state == READY and clientSock is not None:
-            cmd = await TCPTools.waitForCommand(clientSock)
+                except OSError as e:
+                    errorMessage = f"Network error: {e}"
+                    state = ERROR
+                    continue
+                except Exception as e:
+                    errorMessage = f"Error in WAITING state: {e}"
+                    state = ERROR
+                    continue
 
-            if not cmd:
-                errorMessage = "Empty message received. Server closed connection or there was an error."
-                state = ERROR
-                continue
+            # ------------- #
+            #  READY STATE  #
+            # ------------- #
+            if state == READY and clientSock is not None:
 
-            print(f"Received command: {cmd}")
+                try:
+                    cmd = await TCPTools.waitForCommand(clientSock)
 
-        # ------------- #
-        #  ERROR STATE  #
-        # ------------- #
+                    if not cmd:
+                        errorMessage = "Empty message received. Server closed connection or there was an error."
+                        state = ERROR
+                        continue
 
-        # The error state will handle all the potential cleanup so we can just reset the state to WAITING afterwards.
-        # Any error that we are catching should probably trigger an error state, so we can reset the device and try again.
-        if state == ERROR:
-            print(f"ERROR STATE:\n{errorMessage}\nResetting to WAITING state.")
+                    print(f"Received command: {cmd}")
+
+                    response: str = ""  # Reset response for each command
+
+                    cmdParts = cmd.split(" ", 1)
+                    if cmdParts[0] == "GETS": response = await commands.gets(sensors, clientSock)  # Get a single reading from each sensor and return it as a formatted string
+                    if cmdParts[0] == "STRM": response = commands.strm(sensors, clientSock)  # Start streaming data from sensors
+                    if cmdParts[0] == "STOP": commands.stopStrm()  # Stop streaming data from sensors
+
+                    if response:
+                        message = f"{cmdParts[0]} {response}"
+                        clientSock.sendall(message.encode("utf-8"))
+                        print(f"Sent response: {message}")
+
+                except TCPTools.ConnectionClosedError:
+                    state = ERROR
+                    errorMessage = "Connection closed by client."
+                    continue
+
+            # ------------- #
+            #  ERROR STATE  #
+            # ------------- #
+
+            # The error state will handle all the potential cleanup so we can just reset the state to WAITING afterwards.
+            # Any error that we are catching should probably trigger an error state, so we can reset the device and try again.
+            if state == ERROR:
+                print(f"ERROR STATE: {errorMessage}\nResetting to WAITING state.")
+                if clientSock:
+                    clientSock.close()
+                    clientSock = None
+
+                # Reset the sockets and variables to kill any existing connections or attempts to connect.
+                clientSock = None
+
+                state = WAITING
+                errorMessage = ""  # Reset the error message
+
+            await asyncio.sleep(0)  # Yield to event loop
+        except KeyboardInterrupt:
+            print("Server stopped by user.")
             if clientSock:
                 clientSock.close()
-                clientSock = None
-                print("Closed client socket.")
-
-            # Reset the sockets and variables to kill any existing connections or attempts to connect.
-            clientSock = None
-
-            state = WAITING
-            errorMessage = ""  # Reset the error message
-
-        await asyncio.sleep(0)  # Yield to event loop
+            break
