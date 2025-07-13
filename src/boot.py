@@ -293,11 +293,11 @@ async def main(state: int) -> None:
 
                     cmdParts = cmd.split(" ", 1)
                     if cmdParts[0] == "GETS": response = await commands.gets(sensors, clientSock)  # Get a single reading from each sensor and return it as a formatted string
-                    if cmdParts[0] == "STRM": response = commands.strm(sensors, clientSock)  # Start streaming data from sensors
+                    if cmdParts[0] == "STRM": commands.strm(sensors, clientSock)  # Start streaming data from sensors
                     if cmdParts[0] == "STOP": commands.stopStrm()  # Stop streaming data from sensors
 
                     if response:
-                        message = f"{cmdParts[0]} {response}"
+                        message = f"{cmdParts[0]} {response}\n"
                         clientSock.sendall(message.encode("utf-8"))
                         print(f"Sent response: {message}")
 
@@ -320,6 +320,9 @@ async def main(state: int) -> None:
 
                 # Reset the sockets and variables to kill any existing connections or attempts to connect.
                 clientSock = None
+
+                # Kill stream task if it exists
+                commands.stopStrm()
 
                 state = WAITING
                 errorMessage = ""  # Reset the error message

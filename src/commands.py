@@ -18,12 +18,11 @@ async def gets(sensors: list[LoadCell | Thermocouple | PressureTransducer],
 def strm(sensors: list[LoadCell | Thermocouple | PressureTransducer],
          sock: socket.socket,
          frequency_hz: float | None = None,
-         ) -> str:
+         ) -> None:
     """Start the asynchronous data streaming job."""
 
     global streamTask
     streamTask = asyncio.create_task(_streamData(sensors, sock, frequency_hz))
-    return "Started streaming data from sensors."
 
 def stopStrm() -> None:
     """Stop the streaming task if it is running."""
@@ -42,10 +41,16 @@ async def _streamData(sensors: list[LoadCell | Thermocouple | PressureTransducer
                      ) -> None:
     """Asynchronous Helper function to stream data from sensors."""
 
-    while True:
-        data = "STRM " + await gets(sensors, sock) # Attach "STRM" prefix to the data
-        sock.sendall(data.encode("utf-8"))
+    try:
+        while True:
+            data = "STRM " + await gets(sensors, sock) + "\n" # Attach "STRM" prefix to the data
+            sock.sendall(data.encode("utf-8"))
 
-        # If no frequency is specified, stream as fast as possible
-        if frequency_hz is not None:
-            await asyncio.sleep(1 / frequency_hz)
+            # If no frequency is specified, stream as fast as possible
+            if frequency_hz is not None:
+                await asyncio.sleep(1 / frequency_hz)
+
+            # Give a chance to check for cancellation
+            await asyncio.sleep(0)
+    except asyncio.CancelledError:
+        print("Streaming task cancelled.")
