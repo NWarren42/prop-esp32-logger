@@ -61,6 +61,10 @@ reference will work, like the one below.
 
 ![Devkit-C1Pinout](/media/ESP32-S3-pinout.webp)
 
+> [!WARNING]
+> Pins 22 through 37 locked in the current micropython build. I may try and change the build in the future but for
+> now this is the case.
+
 ### Installing Micropython on an ESP32
 
 This project runs in micropython which is a version of python that is built to be ran on little microcontrollers like the

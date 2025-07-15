@@ -20,6 +20,7 @@ from machine import I2C  # type: ignore # machine is a micropython library
 from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
+from Valve import Valve  # type: ignore # Importing the Valve class from Valve.py
 import SSDPTools
 import TCPTools
 import commands
@@ -43,15 +44,16 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
         print(f"Failed to read config file: {e}")
         return {}
 
-def setupDeviceFromConfig(config) -> list[Thermocouple |
-                                          LoadCell |
-                                          PressureTransducer]: # type: ignore  # noqa: ANN001 # Typing for the JSON object is impossible without the full Typing library
+def setupDeviceFromConfig(config) -> tuple[list[Thermocouple | LoadCell | PressureTransducer],
+                                           dict[str, Valve]]: # type: ignore  # noqa: ANN001 # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
         ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
         connection to an external ADC.
         """
+
         sensors: list[Thermocouple | LoadCell | PressureTransducer] = []
+        valves: dict[str, Valve] = {}
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
         deviceType = config.get("deviceType", "Unknown")
@@ -87,12 +89,21 @@ def setupDeviceFromConfig(config) -> list[Thermocouple |
                                         units=details["units"],
                                         ))
 
-            return sensors
+            for name, details in config.get("valves", {}).items():
+                pin = details.get("pin", None)
+                defaultState = details.get("defaultState")
+
+                valves[name.upper()] = (Valve(name=name.upper(),
+                                              pin=pin,
+                                              defaultState=defaultState,
+                                              ))
+
+            return sensors, valves
 
         if deviceType == "Unknown":
             raise ValueError("Device type not specified in config file")
 
-        return []
+        return [], {}  # Return empty lists if no sensors or valves are defined
 
 # --------------------- #
 #    I2C FUNCTIONS
@@ -167,9 +178,9 @@ async def sendConfig(socket: socket.socket,
             jStringConfig = ujson.dumps(config)
             confString = "CONF" + jStringConfig + "\n" # Add a header to the config file so the client knows what it is receiving
 
-            # Currently TCP block size is 1024 bytes, this can be changed if needed but config files are small right now.
+            # Currently TCP block size is 2048 bytes, this can be changed if needed but config files are small right now.
             # This is meant as a warning block of code if we start having larger config files.
-            if len(confString) > 1024:
+            if len(confString) > 2048:
                 raise ValueError("ERROR: Config file too large to send in one TCP block!!.")
 
 
@@ -197,7 +208,7 @@ print("State = INIT")
 
 # Internal setup methods
 config = readConfig(CONFIG_FILE)
-sensors = setupDeviceFromConfig(config)  # Initialize sensors from config file
+sensors, valves = setupDeviceFromConfig(config)  # Initialize sensors from config file
 
 # Networking setup
 wlan        = wt.connectWifi("Nolito", "6138201079")
@@ -291,10 +302,12 @@ async def main(state: int) -> None:
 
                     response: str = ""  # Reset response for each command
 
-                    cmdParts = cmd.split(" ", 1)
-                    if cmdParts[0] == "GETS": response = await commands.gets(sensors, clientSock)  # Get a single reading from each sensor and return it as a formatted string
-                    if cmdParts[0] == "STRM": commands.strm(sensors, clientSock)  # Start streaming data from sensors
-                    if cmdParts[0] == "STOP": commands.stopStrm()  # Stop streaming data from sensors
+                    cmdParts = cmd.split(" ")
+                    print(f"Command parts: {cmdParts}")
+                    if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor and return it as a formatted string
+                    if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
+                    if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
+                    if cmdParts[0] == "VALVE": response = commands.actuateValve(valves, cmdParts[1:])  # Open or close a valve
 
                     if response:
                         message = f"{cmdParts[0]} {response}\n"

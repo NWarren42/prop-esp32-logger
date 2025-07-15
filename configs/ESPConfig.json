@@ -31,5 +31,33 @@
                 "units" : "N"
             }
         }
+    },
+
+    "valves" : {
+        "AVFill": {
+            "pin" : 1,
+            "defaultState" : "CLOSED",
+            "type" : "solenoid"
+        },
+        "AVRun": {
+            "pin" : 41,
+            "defaultState" : "CLOSED",
+            "type" : "solenoid"
+        },
+        "AVDump": {
+            "pin" : 38,
+            "defaultState" : "OPEN",
+            "type" : "solenoid"
+        },
+        "AVPurge1": {
+            "pin" : 20,
+            "defaultState" : "OPEN",
+            "type" : "solenoid"
+        },
+        "AVPurge2": {
+            "pin" : 21,
+            "defaultState" : "OPEN",
+            "type" : "solenoid"
+        }
     }
 }
