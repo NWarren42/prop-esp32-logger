@@ -4,8 +4,12 @@ dictionaryDefinitions: []
 dictionaries: []
 words:
   - absjoin
+  - adcs
+  - colorama
   - COMXX
+  - CREAD
   - DGRAM
+  - DRDY
   - DUMBASS
   - ECONNRESET
   - espdevice
@@ -25,9 +29,12 @@ words:
   - Modbus
   - mpremote
   - Nikhil
+  - numpy
   - osdebug
   - OSRAM
   - pinout
+  - propnet
+  - propteambestteam
   - PSRAM
   - pyproject
   - pyqtgraph
@@ -36,16 +43,21 @@ words:
   - qretproptools
   - QSPI
   - REUSEADDR
+  - rreg
+  - rrxx
   - showlegend
   - skiprows
   - SPIRAM
+  - SREAD
   - ssdp
   - STRM
   - teststand
   - uasyncio
   - USBC
+  - VREF
   - webrepl
   - WLAN
+  - WREG
   - xaxes
   - yaxes
   - ylim

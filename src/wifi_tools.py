@@ -1,4 +1,4 @@
-import socket  # noqa: INP001  # type:ignore # This is a micropython library
+import socket  # type:ignore # This is a micropython library
 import time  # This is all micropython code to be executed on the esp32 system level
 
 import network  # type:ignore # This is a micropython library
@@ -24,14 +24,9 @@ def connectWifi(ssid: str, password: str) -> network.WLAN:
     wlan.connect(ssid, password)
 
     # Wait for connection
-    timeout = 30  # Timeout in seconds
-    while not wlan.isconnected() and timeout > 0:
+    while not wlan.isconnected():
         print("Trying to connect...")
         time.sleep(1)
-        timeout -= 1
-
-    if timeout == 0:
-        raise WiFiTimeoutError
 
     # Check if connected
     if wlan.isconnected():

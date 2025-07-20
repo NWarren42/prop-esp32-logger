@@ -1,4 +1,4 @@
-# BASE MICROPYTHON BOOT.PY-----------------------------------------------|  # noqa: INP001
+# BASE MICROPYTHON BOOT.PY-----------------------------------------------|
 # # This is all micropython code to be executed on the esp32 system level and doesn't require a __init__.py file
 
 # This file is executed on every boot (including wake-boot from deep sleep)
@@ -15,12 +15,13 @@ import socket  # type:ignore # socket is a micropython library
 
 import wifi_tools as wt
 from machine import Pin  # type: ignore # machine is a micropython library
-from machine import I2C  # type: ignore # machine is a micropython library
+from machine import SoftI2C  # type: ignore # SoftI2C is a micropython library for I2C communication
 
 from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
 from Valve import Valve  # type: ignore # Importing the Valve class from Valve.py
+from ADS112C04 import ADS112  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
 import TCPTools
 import commands
@@ -44,8 +45,8 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
         print(f"Failed to read config file: {e}")
         return {}
 
-def setupDeviceFromConfig(config) -> tuple[list[Thermocouple | LoadCell | PressureTransducer],
-                                           dict[str, Valve]]: # type: ignore  # noqa: ANN001 # Typing for the JSON object is impossible without the full Typing library
+def setupDeviceFromConfig(config: dict) -> tuple[list[Thermocouple | LoadCell | PressureTransducer],
+                                           dict[str, Valve]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
         ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
@@ -109,61 +110,26 @@ def setupDeviceFromConfig(config) -> tuple[list[Thermocouple | LoadCell | Pressu
 #    I2C FUNCTIONS
 # --------------------- #
 
-def readRegister(i2cBus: I2C, address: int, register: int) -> bytes:
-    """Read a 8-bit register from the ADS112C04.
-
-    There are two parts to this call. The first part is the address of the device to read from, and the second part is the register to read from.
-    The address section doesn't natively work with the I
-    Address format:
-
-
-    RREG format is as follows:
-    [7:4] Base RREG command (0b0010)
-    [3:2] Register number (0b00 for MUX_GAIN_PGA, 0b01 for DR_MODE_CM_VREF_TS, 0b10 for DRDY_DCNT_CRC_BCS_IDAC, 0b11 for IDAC1_IDAC2)
-    [1:0] Reserved bits (should be 0)
-
-    EXAMPLE for calling register 2:
-    RREG = 0b0010
-    Reg# = 0b10
-    cmd = 0b0010 << 4 | 0b0010 << 2
-    cmd = 0b00100000 | 0b1000
-    cmd = 0b00101000 - Final command to request register 2s bits
-    """
-
-
-    rregCommand = 0b0010 # Read register command as defined in datasheet.
-
-    # Shift the command to the left by 4 bits to put it in the first 4 bits of the write command
-    # Shift the register number to the left by 2 bits to put it in the register number bits for the rreg call
-    fullCmd = rregCommand << 4 | register << 2 # combine the command and register number with bw OR operator
-
-    # Now write the command to the specified device address to query the register contents
-    i2cBus.writeto(address, bytes([fullCmd]), stop=False)
-    data = i2cBus.readfrom(address, 1)
-
-    # The ADS1112 will respond with the contents of the 8 bit register so we read 1 byte.
-
-    # The data is returned as a byte object, so we need to convert it to an integer. Use big scheme because MSB is first transmitted.
-    return data
-
 def setupI2C(): # Return an I2C bus object # noqa: ANN201
     """Set up the I2C bus with the correct pins and frequency.
 
     This function doesn't need input parameters because the pins and frequency are set by the hardware configuration,
     and will never need to change.
     The SCL pin is GPIO 6 on the ESP32, and the SDA pin is GPIO 7 on the ESP32.
-
-
-
     """
 
-    # The Pins NEED to be set to OUT. For some reason the I2C bus doesn't automatically set this on initialization of the bus.
-    sclPin = Pin(6, Pin.OUT) # SCL pin is GPIO 6 on the ESP32. This connects to pin 16 on the ADC
-    sdaPin = Pin(7, Pin.OUT) # SDA pin is GPIO 7 on the ESP32. This connects to pin 15 on the ADC -- THIS MIGHT BE PROBLEMATIC, CANT READ SDA?
-
     # I2C bus 1, SCL pin 6, SDA pin 7, frequency 100kHz
-    i2cBus = I2C(1, scl=sclPin, sda=sdaPin, freq=100000)
+    i2cBus = SoftI2C(scl=Pin(6), sda=Pin(7), freq=100_000)
     return i2cBus
+
+def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112]:
+    """Create a list of ADS112 devices on the I2C bus."""
+    devices = []
+    for addr in addresses:  # Create 4 devices
+        device = ADS112(softI2CBus, addr)
+        devices.append(device)
+    return devices
+
 
 # --------------------- #
 #    ASYNC FUNCTIONS
@@ -210,17 +176,17 @@ print("State = INIT")
 config = readConfig(CONFIG_FILE)
 sensors, valves = setupDeviceFromConfig(config)  # Initialize sensors from config file
 
-# Networking setup
-wlan        = wt.connectWifi("Nolito", "6138201079")
-ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
-tcpListenerSocket   = TCPTools.createListenerTCPSocket()
-
 # I2C Setup
 i2cBus = setupI2C()
 devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list of addresses of devices on the bus.
+adcs = makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices on the I2C bus
 
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
+# Networking setup
+wlan        = wt.connectWifi("propnet", "propteambestteam")
+ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
+tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
 state = WAITING  # Device is waiting for a master to connect
 print("State = WAITING")

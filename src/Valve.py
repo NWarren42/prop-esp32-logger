@@ -1,4 +1,4 @@
-from machine import Pin  # type: ignore - MicroPython's Pin class
+from machine import Pin  # type: ignore
 
 
 class Valve:

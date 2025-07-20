@@ -119,6 +119,7 @@ ignore = [
     "TRY003",  # raise-vanilla-args -- allows passing long strings to Exception constructor
     "UP015",   # redundant-open-modes -- allows explicit open(fpath, "r") instead of open(fpath)
     "TRY301",  # require helper function for try-except -- allows try-except blocks without helper functions
+    "EM102",   # raw-string-in-exception -- allows using raw strings in exceptions
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
