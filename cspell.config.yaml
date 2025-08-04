@@ -8,6 +8,7 @@ words:
   - colorama
   - COMXX
   - CREAD
+  - deinit
   - DGRAM
   - DRDY
   - DUMBASS
@@ -42,6 +43,7 @@ words:
   - qretprop
   - qretproptools
   - QSPI
+  - rdata
   - REUSEADDR
   - rreg
   - rrxx

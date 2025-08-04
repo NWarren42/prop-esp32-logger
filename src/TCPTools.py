@@ -41,6 +41,7 @@ async def waitForConnection(listenerSock: socket.socket) -> tuple[socket.socket,
         tuple: (client_socket, address)
             - client_socket: Socket for communication with the connected client
             - address: Tuple of (ip_address, port) of the connected client
+
     """
     while True:
         try:

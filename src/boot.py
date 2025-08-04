@@ -21,7 +21,7 @@ from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
 from Valve import Valve  # type: ignore # Importing the Valve class from Valve.py
-from ADS112C04 import ADS112  # type: ignore # Importing the ADS112 class from ADS112
+from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
 import TCPTools
 import commands
@@ -45,7 +45,8 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
         print(f"Failed to read config file: {e}")
         return {}
 
-def setupDeviceFromConfig(config: dict) -> tuple[list[Thermocouple | LoadCell | PressureTransducer],
+def setupDeviceFromConfig(config: dict,
+                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer],
                                            dict[str, Valve]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
@@ -53,7 +54,7 @@ def setupDeviceFromConfig(config: dict) -> tuple[list[Thermocouple | LoadCell | 
         connection to an external ADC.
         """
 
-        sensors: list[Thermocouple | LoadCell | PressureTransducer] = []
+        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer] = {}
         valves: dict[str, Valve] = {}
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
@@ -63,32 +64,55 @@ def setupDeviceFromConfig(config: dict) -> tuple[list[Thermocouple | LoadCell | 
             sensorInfo = config.get("sensorInfo", {})
 
             for name, details in sensorInfo.get("thermocouples", {}).items():
-                sensors.append(Thermocouple(name=name,
-                                            ADCIndex=details["ADCIndex"],
-                                            highPin=details["highPin"],
-                                            lowPin=details["lowPin"],
-                                            thermoType=details["type"],
-                                            units=details["units"],
-                                            ))
+
+                # Find the corresponding ADC for the thermocouple
+                adc = None
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                    adc = adcs[details["ADCIndex"] - 1]
+
+                sensors[name] = Thermocouple(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adc,  # Optional ADC for external ADCs
+                    highPin=details["highPin"],
+                    lowPin=details["lowPin"],
+                    units=details["units"],
+                    thermoType=details["type"],
+                )
 
             for name, details in sensorInfo.get("pressureTransducers", {}).items():
-                sensors.append(PressureTransducer(name=name,
-                                                ADCIndex=details["ADCIndex"],
-                                                pinNumber=details["pin"],
-                                                maxPressure_PSI=details["maxPressure_PSI"],
-                                                units=details["units"],
-                                                ))
+                # Find the corresponding ADC for the pressure transducer
+                adc = None
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                    adc = adcs[details["ADCIndex"] - 1]
+
+                sensors[name] = PressureTransducer(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adc,  # Optional ADC for external ADCs
+                    pinNumber=details["pin"],
+                    maxPressure_PSI=details["maxPressure_PSI"],
+                    units=details["units"],
+                )
 
             for name, details in sensorInfo.get("loadCells", {}).items():
-                sensors.append(LoadCell(name=name,
-                                        ADCIndex=details["ADCIndex"],
-                                        highPin=details["highPin"],
-                                        lowPin=details["lowPin"],
-                                        loadRating_N=details["loadRating_N"],
-                                        excitation_V=details["excitation_V"],
-                                        sensitivity_vV=details["sensitivity_vV"],
-                                        units=details["units"],
-                                        ))
+
+                # Find the corresponding ADC for the load cell
+                adc = None
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                    adc = adcs[details["ADCIndex"] - 1]
+
+                sensors[name] = LoadCell(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adc,  # Optional ADC for external ADCs
+                    highPin=details["highPin"],
+                    lowPin=details["lowPin"],
+                    loadRating_N=details["loadRating_N"],
+                    excitation_V=details["excitation_V"],
+                    sensitivity_vV=details["sensitivity_vV"],
+                    units=details["units"],
+                )
 
             for name, details in config.get("valves", {}).items():
                 pin = details.get("pin", None)
@@ -104,7 +128,7 @@ def setupDeviceFromConfig(config: dict) -> tuple[list[Thermocouple | LoadCell | 
         if deviceType == "Unknown":
             raise ValueError("Device type not specified in config file")
 
-        return [], {}  # Return empty lists if no sensors or valves are defined
+        return {}, {}  # Return empty dicts if no sensors or valves are defined
 
 # --------------------- #
 #    I2C FUNCTIONS
@@ -122,14 +146,13 @@ def setupI2C(): # Return an I2C bus object # noqa: ANN201
     i2cBus = SoftI2C(scl=Pin(6), sda=Pin(7), freq=100_000)
     return i2cBus
 
-def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112]:
+def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112C04]:
     """Create a list of ADS112 devices on the I2C bus."""
     devices = []
     for addr in addresses:  # Create 4 devices
-        device = ADS112(softI2CBus, addr)
+        device = ADS112C04(softI2CBus, addr)
         devices.append(device)
     return devices
-
 
 # --------------------- #
 #    ASYNC FUNCTIONS
@@ -172,19 +195,20 @@ TCPRequests = ("SREAD", # Reads a single value from all sensors
 state = INIT  # Device is initializing
 print("State = INIT")
 
-# Internal setup methods
-config = readConfig(CONFIG_FILE)
-sensors, valves = setupDeviceFromConfig(config)  # Initialize sensors from config file
-
-# I2C Setup
+# I2C Setup - Need to establish
 i2cBus = setupI2C()
 devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list of addresses of devices on the bus.
 adcs = makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices on the I2C bus
 
+# Internal setup methods
+config = readConfig(CONFIG_FILE)
+sensors, valves = setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
+
+
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
 # Networking setup
-wlan        = wt.connectWifi("propnet", "propteambestteam")
+wlan        = wt.connectWifi("Nolito", "6138201079")
 ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
 tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
@@ -202,7 +226,7 @@ def run() -> None:
 
 
 async def main(state: int) -> None:
-    global tcpListenerSocket
+    global tcpListenerSocket  # noqa: PLW0603
 
     # Set up some variables for the server state
     clientSock = None
@@ -222,34 +246,39 @@ async def main(state: int) -> None:
             # ------------- #
             # WAITING STATE #
             # ------------- #
-            if state == WAITING:
-                print("Waiting for a master to connect...")
+            try:
+                if state == WAITING:
+                    print("Waiting for a master to connect...")
 
-                # Ensure we have a listening socket
-                if tcpListenerSocket is None:
-                    tcpListenerSocket = TCPTools.createListenerTCPSocket()
+                    # Ensure we have a listening socket
+                    if tcpListenerSocket is None:
+                        tcpListenerSocket = TCPTools.createListenerTCPSocket()
 
-                try:
-                    # Wait for incoming TCP connection
-                    clientSock, clientAddr = await TCPTools.waitForConnection(tcpListenerSocket)
+                    try:
+                        # Wait for incoming TCP connection
+                        clientSock, clientAddr = await TCPTools.waitForConnection(tcpListenerSocket)
 
-                    # Send config to newly connected client
-                    jStringConfig = ujson.dumps(config)
-                    confString = "CONF" + jStringConfig + "\n"
-                    clientSock.sendall(confString.encode("utf-8"))
-                    print(f"Sent config to client at {clientAddr}")
+                        # Send config to newly connected client
+                        jStringConfig = ujson.dumps(config)
+                        confString = "CONF" + jStringConfig + "\n"
+                        clientSock.sendall(confString.encode("utf-8"))
+                        print(f"Sent config to client at {clientAddr}")
 
-                    state = READY
-                    print("State = READY")
+                        state = READY
+                        print("State = READY")
 
-                except OSError as e:
-                    errorMessage = f"Network error: {e}"
-                    state = ERROR
-                    continue
-                except Exception as e:
-                    errorMessage = f"Error in WAITING state: {e}"
-                    state = ERROR
-                    continue
+                    except OSError as e:
+                        errorMessage = f"Network error: {e}"
+                        state = ERROR
+                        continue
+                    except Exception as e:
+                        errorMessage = f"Error in WAITING state: {e}"
+                        state = ERROR
+                        continue
+            except Exception as e:
+                state = ERROR
+                errorMessage = f"Unexpected error in waiting state: {e}"
+                continue
 
             # ------------- #
             #  READY STATE  #
@@ -270,7 +299,7 @@ async def main(state: int) -> None:
 
                     cmdParts = cmd.split(" ")
                     print(f"Command parts: {cmdParts}")
-                    if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor and return it as a formatted string
+                    if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor
                     if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
                     if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
                     if cmdParts[0] == "VALVE": response = commands.actuateValve(valves, cmdParts[1:])  # Open or close a valve
@@ -306,9 +335,13 @@ async def main(state: int) -> None:
                 state = WAITING
                 errorMessage = ""  # Reset the error message
 
-            await asyncio.sleep(0)  # Yield to event loop
+                await asyncio.sleep(0)  # Yield to event loop
+
         except KeyboardInterrupt:
             print("Server stopped by user.")
             if clientSock:
                 clientSock.close()
+            ssdpTask.cancel()  # Cancel the SSDP task
+            if tcpListenerSocket:
+                tcpListenerSocket.close()  # Close the TCP listener socket
             break

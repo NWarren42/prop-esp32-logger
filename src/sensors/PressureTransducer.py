@@ -1,44 +1,54 @@
 # noqa: INP001 -- Implicit namespace doesn't matter here
-from machine import ADC, Pin  # type: ignore # These are micropython libraries
+from sensors.Sensor import Sensor  # Importing the base Sensor class
 
 
-class PressureTransducer:
+class PressureTransducer(Sensor):
+    """Class for reading pressure transducer data from an ADC."""
 
-    def __init__ (self,
-                  name: str,
-                  ADCIndex: int,
-                  pinNumber: int,
-                  maxPressure_PSI: int,
-                  units: str,
-                  ):
-
-        self.name = name
-        self.ADCIndex = ADCIndex # ADCIndex is the index of the ADC in the config file. 0 indicates the ESP32 ADC.
-        if self.ADCIndex == 0:
-            self.pin = ADC(pinNumber) # Pin number is the GPIO pin number. ADC constructor accepts either integer or a Pin() object.
+    def __init__(self,
+                 name: str,
+                 ADCIndex: int,
+                 ADC: None,  # For future external ADC support, currently None
+                 pinNumber: int,
+                 maxPressure_PSI: int,
+                 units: str,
+                 ):
+        super().__init__(
+            name=name,
+            ADCIndex=ADCIndex,
+            ADC=ADC,
+            highPin=pinNumber,
+            lowPin=-1,
+            units=units,
+        )
         self.maxPressure_PSI = maxPressure_PSI
-        self.units = units
 
-        self.data = []
+        if self.units not in ["PSI", "V"]:
+            raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'PSI' and 'V'.")
 
+    def takeData(self, unit:str ="DEF") -> float:
+        """Take a reading from the pressure transducer and add it to the data list."""
+        vReading = self._getVoltageReading()
 
-    def takeData (self, unit="DEF") -> float | int: # If no units are specified, return voltage reading. DEF for default.
-        """Take a reading from the pressure transducer.
-
-        Args:
-            unit (str, optional): The units to return the reading in. Defaults
-            to "DEF". If "DEF" is specified, the units will be the same as the
-            units specified in the config file. PSI and V are also valid calls.
-        """
         if unit == "DEF":
-            unit = self.units
-
-        vReading: int = self.pin.read() # Sensor voltage reading
-        if unit == "PSI":
-            return ((vReading-1)/4)*(self.maxPressure_PSI) # output is 4-20mA across a 250R resistor so we have a 4V range (1-5V).
-                                                           # Subtracting 1 because 1 is the minimum voltage output and we need to set the floor
-        if unit == "V":
-            return (vReading/4095) * 3.3 # 4095 is the max value for the ESP32 ADC. 3.3V is the max voltage output of the ESP32 ADC.
-
+            readingUnit = self.units
         else:
-            raise ValueError(f"Invalid unit specified: {unit}. Valid units are \'PSI\' and \'V\'.")
+            readingUnit = unit
+
+        if readingUnit == "V":
+            self.data.append(vReading)
+            return vReading
+
+        if readingUnit == "PSI":
+            psi = self._convertVoltageToPressure(vReading)
+            self.data.append(psi)
+            return psi
+
+        raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'PSI' and 'V'.")
+
+    def _convertVoltageToPressure(self, voltage: float) -> float:
+        """Convert the voltage reading to pressure in PSI."""
+        # Example conversion for 4-20mA sensor across 250R resistor (1-5V output)
+        # Adjust formula as needed for your sensor
+        return ((voltage - 1) / 4) * self.maxPressure_PSI
+

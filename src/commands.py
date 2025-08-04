@@ -1,5 +1,6 @@
 import asyncio
 import socket
+import time
 
 from sensors.LoadCell import LoadCell
 from sensors.PressureTransducer import PressureTransducer
@@ -9,17 +10,41 @@ from Valve import Valve
 
 streamTask: asyncio.Task | None = None  # Task for streaming data from sensors
 
-async def gets(sensors: list[LoadCell | Thermocouple | PressureTransducer]) -> str:
-    """Get a single reading from each sensor and return it as a formatted string."""
-    data = " ".join(str(sensor.takeData()) for sensor in sensors)
-    return data
+async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer]) -> str:
+    """Get a single reading from each sensor and return it as a formatted string.
 
-def strm(sensors: list[LoadCell | Thermocouple | PressureTransducer],
+    Data string format is: <acqTime:timestamp>,<sensor1_name>:value,<sensor2_name>:value,...
+
+    """
+
+    dataDict = {}
+
+    acqTime = time.time()  # Get the current time in seconds since the epoch
+    dataDict["acqTime"] = acqTime
+
+    for sensor in sensors.values():
+        dataDict[sensor.name] = sensor.takeData()
+
+    # Format the data as a string
+    timeString = f"time:{acqTime:.3f}"  # Format the acquisition time to 3 decimal places
+
+    sortedKeys = sorted(dataDict.keys())
+    dataString = " ".join(f"{key}:{dataDict[key]}" for key in sortedKeys if key != "acqTime")
+
+    # Combine the time string with the data string
+    payload = f"{timeString} {dataString}"
+
+    return payload
+
+def strm(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer],
          sock: socket.socket,
-         args: list[str] = [],
+         args: list[str] | None = None,
          ) -> None:
     """Start the asynchronous data streaming job."""
-    global streamTask
+    if args is None:
+        args = []
+
+    global streamTask  # noqa: PLW0603
 
     if len(args) == 1:
         # If a frequency is specified, run sampling at that frequency
@@ -32,7 +57,7 @@ def strm(sensors: list[LoadCell | Thermocouple | PressureTransducer],
 
 def stopStrm() -> str:
     """Stop the streaming task if it is running."""
-    global streamTask
+    global streamTask  # noqa: PLW0603
 
     if streamTask and not streamTask.done():
         streamTask.cancel()
@@ -83,11 +108,10 @@ def actuateValve(valves: dict[str, Valve], args : list[str]) -> str:
         print(msg)
         return msg
 
-    else:
-        return f"Invalid action '{action}' for valve '{valveName}'. Use 'OPEN' or 'CLOSE'."
+    return f"Invalid action '{action}' for valve '{valveName}'. Use 'OPEN' or 'CLOSE'."
 
 
-async def _streamData(sensors: list[LoadCell | Thermocouple | PressureTransducer],
+async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer],
                       sock: socket.socket,
                       frequency_hz: float | None,
                      ) -> None:

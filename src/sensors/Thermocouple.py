@@ -1,8 +1,9 @@
 # noqa: INP001 -- Implicit namespace doesn't matter here
-from machine import ADC, Pin  # type: ignore # These are micropython libraries
+from ADS112C04 import ADS112C04  # Importing the ADS112C04 class for external ADCs
+from sensors.Sensor import Sensor  # Importing the base Sensor class
 
 
-class Thermocouple:
+class Thermocouple(Sensor):
     """Class for reading thermocouple data from an ADC.
 
     UNFINISHED. Don't use this yet. Need to see how the circuitry works out
@@ -12,37 +13,52 @@ class Thermocouple:
     def __init__ (self,
                   name: str,
                   ADCIndex: int,
+                  ADC: ADS112C04 | None,  # Optional ADS112C04 instance for external ADCs. None if using the ESP32 ADC.
                   highPin: int,
                   lowPin: int,
-                  thermoType: str,
                   units: str,
+                  thermoType: str,
                   ):
 
-        self.name = name
-        self.ADCIndex = ADCIndex # ADCIndex is the index of the ADC in the config file. 0 indicates the ESP32 ADC.
-        if self.ADCIndex == 0:
-            # If the ADC index is 0, use the ESP32 ADC
-            self.highPin = ADC(highPin) # Pin number is the GPIO pin number. ADC constructor accepts either integer or a Pin() object.
-            self.lowPin = ADC(lowPin)
+        super().__init__(
+            name=name,
+            ADCIndex=ADCIndex,
+            ADC=ADC,  # No external ADC for thermocouples
+            highPin=highPin,
+            lowPin=lowPin,
+            units=units,
+        )
+
+        if self.units not in ["V", "C"]:
+            raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
+
         self.type = thermoType
-        self.units = units
 
-        self.data = []
 
-    def takeData (self, units="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
-        """Take a reading from the thermocouple.
-        Args:
-            unit (str, optional): The units to return the reading in. Defaults
-            to "DEF". If "DEF" is specified, the units will be the same as the
-            units specified in the config file. Currently V is the only valid call.
-        """
+    def takeData(self, unit="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
+        """Take a reading from the thermocouple and add it to the data list."""
+        reading = self._getVoltageReading()
 
-        if units == "DEF":
-            units = "V"
-
-        vReading = self.highPin.read() - self.lowPin.read()
-        if units == "V":
-            return (vReading/4095) * 3.3 # 4095 is the max value for the ESP32 ADC. 3.3V is the max voltage output of the ESP32 ADC.
-
+        if unit == "DEF":
+            readingUnit = self.units
         else:
-            raise ValueError(f"Invalid unit specified: {units}. Valid units are \'V\'.")
+            readingUnit = unit
+
+        if readingUnit == "V":
+            self.data.append(reading)
+            return reading
+
+        if readingUnit == "C":
+            self.data.append(self._convertVoltageToTemperature(reading))
+            return self._convertVoltageToTemperature(reading)
+
+        raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
+
+    def _convertVoltageToTemperature(self, voltage: float) -> float:
+        """Convert the voltage reading to temperature in Celsius.
+
+        This method should be implemented based on the thermocouple type.
+        """
+        # FIXME: Placeholder for conversion logic
+        # For example, if using a K-type thermocouple, you would use the appropriate conversion formula.
+        return voltage
