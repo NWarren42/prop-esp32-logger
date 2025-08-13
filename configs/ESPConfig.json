@@ -4,36 +4,36 @@
     "sensorInfo": {
         "thermocouples": {
             "TCNitrousRun": {
-                "ADCIndex" : 2,
-                "highPin" : 0,
-                "lowPin" : 1,
+                "ADCIndex" : 1,
+                "highPin" : 1,
+                "lowPin" : 0,
                 "type" : "K",
                 "units" : "C"
             }
         },
-        
+
         "pressureTransducers": {
             "PTN2Supply": {
-                "ADCIndex" : 1,
-                "pin" : 0,
+                "ADCIndex" : 3,
+                "pin" : 1,
                 "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
             "PTN2OSupply": {
-                "ADCIndex" : 1,
-                "pin" : 1,
+                "ADCIndex" : 3,
+                "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTRun": {
-                "ADCIndex" : 1,
-                "pin" : 2,
+                "ADCIndex" : 4,
+                "pin" : 3,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTPreInjector": {
-                "ADCIndex" : 1,
-                "pin" : 3,
+                "ADCIndex" : 4,
+                "pin" : 2,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             }
@@ -41,9 +41,18 @@
 
         "loadCells": {
             "LCThrust": {
+                "ADCIndex" : 3,
+                "highPin" : 3,
+                "lowPin" : 2,
+                "loadRating_N" : 5000,
+                "excitation_V" : 10,
+                "sensitivity_vV" : 2,
+                "units" : "N"
+            },
+            "LCFill": {
                 "ADCIndex" : 2,
-                "highPin" : 2,
-                "lowPin" : 3,
+                "highPin" : 1,
+                "lowPin" : 0,
                 "loadRating_N" : 5000,
                 "excitation_V" : 10,
                 "sensitivity_vV" : 2,
@@ -52,36 +61,46 @@
         }
     },
 
-    "valves" : {
+    "controls" : {
         "AVFill": {
-            "pin" : 6,
+            "pin" : 43,
             "defaultState" : "CLOSED",
             "type" : "solenoid"
         },
         "AVRun": {
-            "pin" : 15,
+            "pin" : 44,
             "defaultState" : "CLOSED",
             "type" : "solenoid"
         },
         "AVDump": {
-            "pin" : 5,
+            "pin" : 42,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
         "AVPurge1": {
-            "pin" : 4,
+            "pin" : 1,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
         "AVPurge2": {
-            "pin" : 7,
+            "pin" : 2,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
         "AVVent": {
-            "pin" : 16,
+            "pin" : 41,
             "defaultState" : "OPEN",
             "type" : "solenoid"
+        },
+        "Safe24": {
+            "pin" : 40,
+            "defaultState" : "OPEN",
+            "type" : "relay"
+        },
+        "Ign": {
+            "pin" : 39,
+            "defaultState" : "OPEN",
+            "type" : "relay"
         }
     }
 }

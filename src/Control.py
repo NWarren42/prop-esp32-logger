@@ -1,13 +1,15 @@
 from machine import Pin  # type: ignore
 
 
-class Valve:
+class Control:
     def __init__(self,
                  name: str,
+                 controlType: str,  # Type of control, e.g., "solenoid", "valve", etc.
                  pin: int,
                  defaultState: str,
                  ):
         self.name = name
+        self.type = controlType
         self.pin = Pin(pin, Pin.OUT)
         self.defaultState = defaultState.upper()  # Normalize to upper case for consistency
         self.currentState = self.defaultState

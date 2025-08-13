@@ -20,7 +20,7 @@ from machine import SoftI2C  # type: ignore # SoftI2C is a micropython library f
 from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
-from Valve import Valve  # type: ignore # Importing the Valve class from Valve.py
+from Control import Control  # type: ignore # Importing the Valve class from Valve.py
 from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
 import TCPTools
@@ -36,6 +36,10 @@ ERROR = 4       # Device has encountered an error. Will default to WAITING state
 CONFIG_FILE = "ESPConfig.json"
 TCP_PORT = 50000  # Port that I've chosen for the TCP server to listen on. This is the port that the master will connect to.
 
+WIFI_INDICATOR_PIN = Pin(8, Pin.OUT)
+SAFE24_PIN: Pin | None = None  # Pin for the SAFE24 switch, if used. Set to None if not used.
+IGNITOR_PIN: Pin | None = None  # Pin for the ignitor switch, if used. Set to None if not used.
+
 def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
     try:
         with open(filePath, "r") as file:
@@ -47,7 +51,7 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
 
 def setupDeviceFromConfig(config: dict,
                           adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer],
-                                           dict[str, Valve]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
+                                           dict[str, Control]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
         ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
@@ -55,7 +59,7 @@ def setupDeviceFromConfig(config: dict,
         """
 
         sensors: dict[str, Thermocouple | LoadCell | PressureTransducer] = {}
-        valves: dict[str, Valve] = {}
+        controls: dict[str, Control] = {}
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
         deviceType = config.get("deviceType", "Unknown")
@@ -114,16 +118,21 @@ def setupDeviceFromConfig(config: dict,
                     units=details["units"],
                 )
 
-            for name, details in config.get("valves", {}).items():
+            for name, details in config.get("controls", {}).items():
                 pin = details.get("pin", None)
                 defaultState = details.get("defaultState")
 
-                valves[name.upper()] = (Valve(name=name.upper(),
-                                              pin=pin,
-                                              defaultState=defaultState,
-                                              ))
+                controls[name.upper()] = (Control(name=name.upper(),
+                                                controlType=details.get("type").upper(),  # Normalize type to upper case
+                                                pin=pin,
+                                                defaultState=defaultState,
+                                                ))
 
-            return sensors, valves
+
+
+
+
+            return sensors, controls
 
         if deviceType == "Unknown":
             raise ValueError("Device type not specified in config file")
@@ -142,8 +151,8 @@ def setupI2C(): # Return an I2C bus object # noqa: ANN201
     The SCL pin is GPIO 6 on the ESP32, and the SDA pin is GPIO 7 on the ESP32.
     """
 
-    # I2C bus 1, SCL pin 6, SDA pin 7, frequency 100kHz
-    i2cBus = SoftI2C(scl=Pin(6), sda=Pin(7), freq=100_000)
+    # I2C bus 1, SCL pin 16, SDA pin 15, frequency 100kHz
+    i2cBus = SoftI2C(scl=Pin(16), sda=Pin(15), freq=100_000)
     return i2cBus
 
 def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112C04]:
@@ -202,13 +211,16 @@ adcs = makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices on the
 
 # Internal setup methods
 config = readConfig(CONFIG_FILE)
-sensors, valves = setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
+sensors, controls = setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
 
 
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
 # Networking setup
-wlan        = wt.connectWifi("Nolito", "6138201079")
+wlan = wt.connectWifi("propnet", "propteambestteam")
+if wlan:
+    WIFI_INDICATOR_PIN.on()
+
 ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
 tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
@@ -302,7 +314,7 @@ async def main(state: int) -> None:
                     if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor
                     if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
                     if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
-                    if cmdParts[0] == "VALVE": response = commands.actuateValve(valves, cmdParts[1:])  # Open or close a valve
+                    if cmdParts[0] == "CONTROL": response = commands.actuateControl(controls, cmdParts[1:])  # Open or close a control
 
                     if response:
                         message = f"{cmdParts[0]} {response}\n"

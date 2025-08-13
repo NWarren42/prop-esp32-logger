@@ -10,7 +10,7 @@ mpremote fs cp .\src\TCPTools.py :/
 mpremote fs cp .\src\REPLTools.py :/
 mpremote fs cp .\src\wifi_tools.py :/
 
-mpremote fs cp .\src\Valve.py :/
+mpremote fs cp .\src\Control.py :/
 
 mpremote fs cp .\src\sensors\LoadCell.py :/sensors/
 mpremote fs cp .\src\sensors\Thermocouple.py :/sensors/

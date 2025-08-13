@@ -2,10 +2,10 @@ import asyncio
 import socket
 import time
 
+from Control import Control
 from sensors.LoadCell import LoadCell
 from sensors.PressureTransducer import PressureTransducer
 from sensors.Thermocouple import Thermocouple
-from Valve import Valve
 
 
 streamTask: asyncio.Task | None = None  # Task for streaming data from sensors
@@ -69,46 +69,51 @@ def stopStrm() -> str:
     streamTask = None  # Reset the task reference
     return msg
 
-def actuateValve(valves: dict[str, Valve], args : list[str]) -> str:
+def actuateControl(controls: dict[str, Control], args : list[str]) -> str:
+    """Actuate a control (e.g., open or close a valve) based on the command arguments.
+
+    For relay type controls, closed lets current flow, open stops current flow.
+    """
 
     if len(args) != 2:
-        return "Invalid number of arguments for valve command. Usage: VALVE <valve_name> <open|close>"
+        return "Invalid number of arguments for control command. Usage: CONTROL <control_name> <open|close>"
 
-    valveName, action = args
-    valveName = valveName.upper()  # All commands normalized to upper case to be case-insensitive
-    # Valve lookup
+    controlName, action = args
+    controlName = controlName.upper()  # All commands normalized to upper case to be case-insensitive
+    # Control lookup
     try:
-        valve = valves[valveName]
+        control = controls[controlName]
     except KeyError:
-        msg = f"Valve '{valveName}' not found. Valid valves are: {', '.join(valves.keys())}."
+        msg = f"Control '{controlName}' not found. Valid controls are: {', '.join(controls.keys())}."
         print(msg)
         return msg
 
-    # Actuate the valve based on the action
+    # Actuate the control based on the action
     if action.upper() == "OPEN":
-        if valve.currentState == "CLOSED":
-            valve.open()
-            msg = f"{valveName} opened"
+        if control.currentState == "CLOSED":
+            control.open()
+            msg = f"{controlName} opened"
         else:
-            msg = f"{valveName} already open"
+            msg = f"{controlName} already open"
 
         print(msg)
         return msg
 
     # Close the valve if the action is "close"
     if action.upper() == "CLOSE":
-        if valve.currentState == "OPEN":
-            msg = f"{valveName} closed"
-            valve.close()
+        if control.currentState == "OPEN":
+            msg = f"{controlName} closed"
+            control.close()
         else:
-            msg = f"{valveName} already closed"
+            msg = f"{controlName} already closed"
             print(msg)
             return msg
 
         print(msg)
         return msg
 
-    return f"Invalid action '{action}' for valve '{valveName}'. Use 'OPEN' or 'CLOSE'."
+    return f"Invalid action '{action}' for control '{controlName}'. Use 'OPEN' or 'CLOSE'."
+
 
 
 async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer],
