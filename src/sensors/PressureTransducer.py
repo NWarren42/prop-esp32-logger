@@ -22,12 +22,16 @@ class PressureTransducer(Sensor):
             units=units,
         )
         self.maxPressure_PSI = maxPressure_PSI
+        self.pgaGain = 1
 
         if self.units not in ["PSI", "V"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'PSI' and 'V'.")
 
     def takeData(self, unit:str ="DEF") -> float:
         """Take a reading from the pressure transducer and add it to the data list."""
+        if self.ADC and self.ADC.pgaGain != self.pgaGain:
+            self.ADC.setPGA(self.pgaGain)
+
         vReading = self._getVoltageReading()
 
         if unit == "DEF":

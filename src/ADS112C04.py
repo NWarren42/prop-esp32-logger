@@ -130,32 +130,26 @@ class ADS112C04:
         [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read
 
         """
-        # The MUX lookup table is built off of (+ve, -ve) tuples, where -1 indicates GND.
         channel = (AIN_Positive, AIN_Negative)
-
-        # Validate the input channel
         if channel not in MUX_CODES:
             raise ValueError(f"Invalid channel read configuration: {channel}")
 
-        muxSetting = MUX_CODES[channel]  # Shift the MUX code to the correct position
-        gainSetting = 0b000  # Gain set to 1
-        pgaBypass = 0b1  # Bypass the programmable gain amplifier for
+        muxSetting = MUX_CODES[channel]
 
-        registerValue = bytes([muxSetting << 4 |
-                               gainSetting << 1| #FIXME: Currently no way to change PGA setting. Always set to 1.
-                               pgaBypass])
+        # Read current Reg0, keep lower 4 bits (gain + bypass), replace only MUX
+        reg0 = self.readRegister(0)[0]
+        reg0 = (reg0 & 0x0F) | (muxSetting << 4)
 
-        self.writeRegister(0, registerValue)
+        # Ensure PGA is NOT bypassed (bit0 = 0)
+        reg0 &= ~0x01  # clear bit0 -> PGA enabled
 
-        # Check for a successful write by reading the register back
-        readValue = self.readRegister(0)
-        if readValue != registerValue:
-            print(f"Failed to set MUX channel {channel}. Expected {registerValue}, got {readValue}")
+        self.writeRegister(0, bytes([reg0]))
+        check = self.readRegister(0)
+        if check[0] != reg0:
+            print(f"Failed to set MUX channel {channel}. Expected {reg0:#04x}, got {check[0]:#04x}")
         else:
-            # If the write was successful, update the active pins
             self.activePosPin = channel[0]
             self.activeNegPin = channel[1]
-            # print(f"Positive pin set to {channel[0]}, negative pin set to {channel[1]} (MUX code: 0x{muxSetting})")
 
     def getReading(self,
                            AIN_Pos: int,
@@ -255,6 +249,35 @@ class ADS112C04:
         # print(f"Read from register {register}: {bitString}")
 
         return buf  # Return the read data
+
+    def setPGA(self, gain: int) -> None:
+        """Set the Programmable Gain Amplifier (PGA) gain.
+
+        :param gain: The gain to set (1, 2, 4, 8, 16, 32, 64, or 128).
+        """
+        if gain not in [1, 2, 4, 8, 16, 32, 64, 128]:
+            raise ValueError(f"Invalid gain value: {gain}. Valid values are: [1, 2, 4, 8, 16, 32, 64, 128].")
+
+        # The PGA setting is in bits [3:1] of the MUX register
+        # MicroPython may not support int.bit_length(), so use a lookup table instead
+        gain_to_bits = {1: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100, 32: 0b101, 64: 0b110, 128: 0b111}
+        pgaSetting = gain_to_bits[gain] << 1
+        # Read the current register 0 value
+        reg0 = self.readRegister(0)[0]
+        # Clear bits 3:1 (PGA gain) and bit 0 (PGA bypass)
+        reg0 &= ~0x0F
+        # Set new PGA gain and ensure PGA bypass is 0 (enabled)
+        reg0 |= pgaSetting  # pgaSetting already shifted to bits 3:1
+        self.writeRegister(0, bytes([reg0]))
+
+        # Check the register was set properly
+        check = self.readRegister(0)
+        if check[0] != reg0:
+            raise ValueError("Failed to set PGA gain.")
+
+        # If we reach this point, the PGA gain was set successfully
+        print(f"Successfully set PGA gain to {gain}.")
+        self.pgaGain = gain  # Update the instance variable
 
     def benchmarkReadings(self,
                           posChannel: int,

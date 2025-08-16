@@ -21,6 +21,7 @@ class Sensor:
         # Pins can either be Pin objects or integers. They are Pins if using the onboard ADC and integers if using the ADS112C04.
         self.highPin: Pin | int
         self.lowPin:  Pin | int
+        self.pgaGain: int = 1  # Default PGA gain for the ADC, can be set later.
 
         # ADC MANAGEMENT
         # --------------------

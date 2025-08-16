@@ -64,7 +64,7 @@ async def waitForConnection(listenerSock: socket.socket) -> tuple[socket.socket,
 
 
 
-async def waitForCommand(serverSock: socket.socket) -> str:
+async def waitForCommand(serverSock: socket.socket) -> list[str]:
     """Wait for a command to come in on the TCP socket and yields the command as a string."""
     while True:
         try:
@@ -72,7 +72,9 @@ async def waitForCommand(serverSock: socket.socket) -> str:
             if not data:  # Socket was closed by peer
                 serverSock.close()
                 raise ConnectionClosedError("Connection closed by peer")
-            return data.decode("utf-8").strip()
+
+            # Split on new lines
+            return [cmd.strip() for cmd in data.decode("utf-8").split("\n") if cmd.strip()]
 
         except OSError:
             # No data available yet, yield to other tasks

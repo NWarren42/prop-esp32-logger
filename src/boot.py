@@ -298,28 +298,28 @@ async def main(state: int) -> None:
             if state == READY and clientSock is not None:
 
                 try:
-                    cmd = await TCPTools.waitForCommand(clientSock)
+                    cmds = await TCPTools.waitForCommand(clientSock)
 
-                    if not cmd:
-                        errorMessage = "Empty message received. Server closed connection or there was an error."
-                        state = ERROR
-                        continue
+                    for cmd in cmds:
+                        if not cmd:
+                            errorMessage = "Empty message received. Server closed connection or there was an error."
+                            state = ERROR
+                            continue
 
-                    print(f"Received command: {cmd}")
+                        response: str = ""  # Reset response for each command
 
-                    response: str = ""  # Reset response for each command
+                        print(f"Received command: {cmd}")
+                        cmdParts = cmd.split(" ")
+                        print(f"Command parts: {cmdParts}")
+                        if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor
+                        if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
+                        if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
+                        if cmdParts[0] == "CONTROL": response = commands.actuateControl(controls, cmdParts[1:])  # Open or close a control
 
-                    cmdParts = cmd.split(" ")
-                    print(f"Command parts: {cmdParts}")
-                    if cmdParts[0] == "GETS": response = await commands.gets(sensors)  # Get a single reading from each sensor
-                    if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
-                    if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
-                    if cmdParts[0] == "CONTROL": response = commands.actuateControl(controls, cmdParts[1:])  # Open or close a control
-
-                    if response:
-                        message = f"{cmdParts[0]} {response}\n"
-                        clientSock.sendall(message.encode("utf-8"))
-                        print(f"Sent response: {message}")
+                        if response:
+                            message = f"{cmdParts[0]} {response}\n"
+                            clientSock.sendall(message.encode("utf-8"))
+                            print(f"Sent response: {message}")
 
                 except TCPTools.ConnectionClosedError:
                     state = ERROR

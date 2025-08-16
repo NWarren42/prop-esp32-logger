@@ -14,13 +14,13 @@
 
         "pressureTransducers": {
             "PTN2Supply": {
-                "ADCIndex" : 3,
+                "ADCIndex" : 4,
                 "pin" : 1,
                 "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
             "PTN2OSupply": {
-                "ADCIndex" : 3,
+                "ADCIndex" : 4,
                 "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
@@ -53,10 +53,10 @@
                 "ADCIndex" : 2,
                 "highPin" : 1,
                 "lowPin" : 0,
-                "loadRating_N" : 5000,
-                "excitation_V" : 10,
-                "sensitivity_vV" : 2,
-                "units" : "N"
+                "loadRating_N" : 889.644,
+                "excitation_V" : 5,
+                "sensitivity_vV" : 36,
+                "units" : "kg"
             }
         }
     },

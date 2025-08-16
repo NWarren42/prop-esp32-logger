@@ -29,6 +29,8 @@ class Thermocouple(Sensor):
             units=units,
         )
 
+        self.pgaGain = 1  # Default PGA gain for the ADC, can be set later.
+
         if self.units not in ["V", "C"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
 
@@ -37,6 +39,9 @@ class Thermocouple(Sensor):
 
     def takeData(self, unit="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
         """Take a reading from the thermocouple and add it to the data list."""
+        if self.ADC and self.ADC.pgaGain != self.pgaGain:
+            self.ADC.setPGA(self.pgaGain)
+
         reading = self._getVoltageReading()
 
         if unit == "DEF":
