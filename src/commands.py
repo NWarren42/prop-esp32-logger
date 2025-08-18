@@ -2,6 +2,8 @@ import asyncio
 import socket
 import time
 
+import ujson
+
 from Control import Control
 from sensors.LoadCell import LoadCell
 from sensors.PressureTransducer import PressureTransducer
@@ -114,7 +116,19 @@ def actuateControl(controls: dict[str, Control], args : list[str]) -> str:
 
     return f"Invalid action '{action}' for control '{controlName}'. Use 'OPEN' or 'CLOSE'."
 
+def getStatus(controls: dict[str, Control]) -> str:
+    status = {
+        "device": "ESP32 Sensor",
+        "status": "OK", # FIXME only ever okay lol
+        "controls": {
+        },
+    }
 
+    # Gather status information from each control
+    for name, control in controls.items():
+        status["controls"][name] = control.currentState.upper()
+
+    return ujson.dumps(status)
 
 async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer],
                       sock: socket.socket,

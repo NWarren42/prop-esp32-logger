@@ -315,6 +315,7 @@ async def main(state: int) -> None:
                         if cmdParts[0] == "STREAM": commands.strm(sensors, clientSock, cmdParts[1:])  # Start streaming data from sensors
                         if cmdParts[0] == "STOP": response = commands.stopStrm()  # Stop streaming data from sensors
                         if cmdParts[0] == "CONTROL": response = commands.actuateControl(controls, cmdParts[1:])  # Open or close a control
+                        if cmdParts[0] == "STATUS" : response = commands.getStatus(controls)
 
                         if response:
                             message = f"{cmdParts[0]} {response}\n"
