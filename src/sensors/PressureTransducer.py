@@ -22,7 +22,7 @@ class PressureTransducer(Sensor):
             units=units,
         )
         self.maxPressure_PSI = maxPressure_PSI
-        self.pgaGain = 1
+        self.pgaGain = -1
 
         if self.units not in ["PSI", "V"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'PSI' and 'V'.")
@@ -40,12 +40,10 @@ class PressureTransducer(Sensor):
             readingUnit = unit
 
         if readingUnit == "V":
-            self.data.append(vReading)
             return vReading
 
         if readingUnit == "PSI":
             psi = self._convertVoltageToPressure(vReading)
-            self.data.append(psi)
             return psi
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'PSI' and 'V'.")

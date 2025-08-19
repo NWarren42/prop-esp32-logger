@@ -21,7 +21,7 @@ class Sensor:
         # Pins can either be Pin objects or integers. They are Pins if using the onboard ADC and integers if using the ADS112C04.
         self.highPin: Pin | int
         self.lowPin:  Pin | int
-        self.pgaGain: int = 1  # Default PGA gain for the ADC, can be set later.
+        self.pgaGain: int = -1  # Default PGA gain for the ADC. -1 for bypass
 
         # ADC MANAGEMENT
         # --------------------
@@ -70,7 +70,7 @@ class Sensor:
 
         # ADS112C04 ADC reading
         if isinstance(self.ADC, ADS112C04):
-            voltageReading = self.ADC.getReading(self.highPin, self.lowPin)
+            voltageReading = self.ADC.getReading(self.highPin, self.lowPin, self.pgaGain)
             return voltageReading # The get reading method returns a voltage reading directly.
 
         raise ValueError("No valid ADC found.")

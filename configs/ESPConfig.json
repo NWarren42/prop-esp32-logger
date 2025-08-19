@@ -3,13 +3,6 @@
     "deviceType": "Sensor Monitor",
     "sensorInfo": {
         "thermocouples": {
-            "TCNitrousRun": {
-                "ADCIndex" : 1,
-                "highPin" : 1,
-                "lowPin" : 0,
-                "type" : "K",
-                "units" : "C"
-            }
         },
 
         "pressureTransducers": {
@@ -40,22 +33,13 @@
         },
 
         "loadCells": {
-            "LCThrust": {
-                "ADCIndex" : 3,
-                "highPin" : 3,
-                "lowPin" : 2,
-                "loadRating_N" : 5000,
-                "excitation_V" : 10,
-                "sensitivity_vV" : 2,
-                "units" : "N"
-            },
             "LCFill": {
                 "ADCIndex" : 2,
                 "highPin" : 1,
                 "lowPin" : 0,
                 "loadRating_N" : 889.644,
                 "excitation_V" : 5,
-                "sensitivity_vV" : 36,
+                "sensitivity_vV" : 20,
                 "units" : "kg"
             }
         }

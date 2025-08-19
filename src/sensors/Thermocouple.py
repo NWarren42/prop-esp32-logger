@@ -49,13 +49,8 @@ class Thermocouple(Sensor):
         else:
             readingUnit = unit
 
-        if readingUnit == "V":
-            self.data.append(reading)
-            return reading
-
-        if readingUnit == "C":
-            self.data.append(self._convertVoltageToTemperature(reading))
-            return self._convertVoltageToTemperature(reading)
+        if readingUnit == "V": return reading
+        if readingUnit == "C": return self._convertVoltageToTemperature(reading)
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
 
