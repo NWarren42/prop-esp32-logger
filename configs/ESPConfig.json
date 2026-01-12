@@ -6,10 +6,10 @@
         },
 
         "pressureTransducers": {
-            "PTN2Supply": {
-                "ADCIndex" : 4,
-                "pin" : 1,
-                "maxPressure_PSI" : 200,
+            "PTCombustionChamber": {
+                "ADCIndex" : 3,
+                "pin" : 0,
+                "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTN2OSupply": {
@@ -18,15 +18,22 @@
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
-            "PTRun": {
+            "PTN2Supply": {
                 "ADCIndex" : 4,
-                "pin" : 3,
-                "maxPressure_PSI" : 1000,
+                "pin" : 1,
+                "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
+
             "PTPreInjector": {
                 "ADCIndex" : 4,
                 "pin" : 2,
+                "maxPressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTRun": {
+                "ADCIndex" : 4,
+                "pin" : 3,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             }
@@ -39,7 +46,16 @@
                 "lowPin" : 0,
                 "loadRating_N" : 889.644,
                 "excitation_V" : 5,
-                "sensitivity_vV" : 20,
+                "sensitivity_vV" : 36,
+                "units" : "kg"
+            },
+            "LCThrust": {
+                "ADCIndex" : 3,
+                "highPin" : 3,
+                "lowPin" : 2,
+                "loadRating_N" : 5000,
+                "excitation_V" : 5,
+                "sensitivity_vV" : 2,
                 "units" : "kg"
             }
         }

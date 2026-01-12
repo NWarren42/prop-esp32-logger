@@ -20,6 +20,7 @@ from machine import SoftI2C  # type: ignore # SoftI2C is a micropython library f
 from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
+from sensors.Current import Current  # type: ignore
 from Control import Control  # type: ignore # Importing the Valve class from Valve.py
 from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
@@ -36,7 +37,7 @@ ERROR = 4       # Device has encountered an error. Will default to WAITING state
 CONFIG_FILE = "ESPConfig.json"
 TCP_PORT = 50000  # Port that I've chosen for the TCP server to listen on. This is the port that the master will connect to.
 
-WIFI_INDICATOR_PIN = Pin(8, Pin.OUT)
+WIFI_INDICATOR_PIN = Pin(21, Pin.OUT)
 SAFE24_PIN: Pin | None = None  # Pin for the SAFE24 switch, if used. Set to None if not used.
 IGNITOR_PIN: Pin | None = None  # Pin for the ignitor switch, if used. Set to None if not used.
 
@@ -50,7 +51,7 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
         return {}
 
 def setupDeviceFromConfig(config: dict,
-                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer],
+                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer | Current],
                                            dict[str, Control]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
@@ -58,7 +59,7 @@ def setupDeviceFromConfig(config: dict,
         connection to an external ADC.
         """
 
-        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer] = {}
+        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer | Current] = {}
         controls: dict[str, Control] = {}
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
@@ -118,6 +119,21 @@ def setupDeviceFromConfig(config: dict,
                     units=details["units"],
                 )
 
+            for name, details in sensorInfo.get("current", {}).items():
+                # Find the corresponding ADC for the current sensor
+                adc = None
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                    adc = adcs[details["ADCIndex"] - 1]
+
+                sensors[name] = Current(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adc,  # Optional ADC for external ADCs
+                    pinNumber=details["pin"],
+                    shuntResistor_Ohms=details["shuntResistor_Ohms"],
+                    csaGain=details["csaGain"],
+                )
+
             for name, details in config.get("controls", {}).items():
                 pin = details.get("pin", None)
                 defaultState = details.get("defaultState")
@@ -127,10 +143,6 @@ def setupDeviceFromConfig(config: dict,
                                                 pin=pin,
                                                 defaultState=defaultState,
                                                 ))
-
-
-
-
 
             return sensors, controls
 

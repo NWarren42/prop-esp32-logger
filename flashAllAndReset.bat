@@ -16,5 +16,6 @@ mpremote fs cp .\src\sensors\LoadCell.py :/sensors/
 mpremote fs cp .\src\sensors\Thermocouple.py :/sensors/
 mpremote fs cp .\src\sensors\PressureTransducer.py :/sensors/
 mpremote fs cp .\src\sensors\Sensor.py :/sensors/
+mpremote fs cp .\src\sensors\Current.py :/sensors/
 
 mpremote reset
